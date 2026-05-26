@@ -4,7 +4,8 @@ import PackageDescription
 let package = Package(
     name: "PadelFinderBackend",
     platforms: [
-       .macOS(.v13)
+        .macOS(.v13),
+        .iOS(.v13)
     ],
     dependencies: [
         // 💧 A server-side Swift web framework.
