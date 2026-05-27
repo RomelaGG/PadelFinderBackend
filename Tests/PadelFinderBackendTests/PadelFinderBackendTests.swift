@@ -265,6 +265,137 @@ struct PadelFinderBackendTests {
         ])
     }
 
+    @Test("Kustba mapper derives court availability from slot and court statuses")
+    func kustbaMapperDerivesCourtAvailability() throws {
+        let slotsJSON = """
+        {
+          "success": true,
+          "data": [
+            {
+              "time": "10:00",
+              "status": "inactive"
+            },
+            {
+              "time": "11:00",
+              "status": "available"
+            },
+            {
+              "time": "12:00",
+              "status": "available"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let courtsAt10JSON = """
+        {
+          "courts": [
+            {
+              "id": 25406,
+              "title": "Court 1",
+              "price": 80,
+              "court_number": 1,
+              "image": "https://via.placeholder.com/300x200?text=Padel+Court",
+              "status": "active",
+              "reason": ""
+            },
+            {
+              "id": 25407,
+              "title": "Court 2",
+              "price": 80,
+              "court_number": 2,
+              "image": "https://kustbapadel.ge/court-2.png",
+              "status": "active",
+              "reason": ""
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let courtsAt11JSON = """
+        {
+          "courts": [
+            {
+              "id": 25406,
+              "title": "Court 1",
+              "price": 80,
+              "court_number": 1,
+              "image": "https://via.placeholder.com/300x200?text=Padel+Court",
+              "status": "active",
+              "reason": ""
+            },
+            {
+              "id": 25407,
+              "title": "Court 2",
+              "price": 80,
+              "court_number": 2,
+              "image": "https://kustbapadel.ge/court-2.png",
+              "status": "inactive",
+              "reason": "booked"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let courtsAt12JSON = """
+        {
+          "courts": [
+            {
+              "id": 25406,
+              "title": "Court 1",
+              "price": 80,
+              "court_number": 1,
+              "image": "https://via.placeholder.com/300x200?text=Padel+Court",
+              "status": "active",
+              "reason": ""
+            },
+            {
+              "id": 25407,
+              "title": "Court 2",
+              "price": 80,
+              "court_number": 2,
+              "image": "https://kustbapadel.ge/court-2.png",
+              "status": "active",
+              "reason": ""
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let slots = try JSONDecoder().decode(KustbaAJAXResponse<[KustbaSlot]>.self, from: slotsJSON).data
+        let courtsAt10 = try JSONDecoder().decode(KustbaCourtsData.self, from: courtsAt10JSON).courts
+        let courtsAt11 = try JSONDecoder().decode(KustbaCourtsData.self, from: courtsAt11JSON).courts
+        let courtsAt12 = try JSONDecoder().decode(KustbaCourtsData.self, from: courtsAt12JSON).courts
+
+        let courts = KustbaPadelMapper.map(
+            slots: slots,
+            courtsBySlot: [
+                "10:00": courtsAt10,
+                "11:00": courtsAt11,
+                "12:00": courtsAt12
+            ],
+            address: "Kus Tba, Tbilisi"
+        )
+
+        #expect(courts.count == 2)
+        #expect(courts[0].id == "kustba-padel-25406")
+        #expect(courts[0].name == "Court 1")
+        #expect(courts[0].pricePerHour == 80)
+        #expect(courts[0].address == "Kus Tba, Tbilisi")
+        #expect(courts[0].imageUrl == nil)
+        #expect(courts[0].timeSlots == [
+            TimeSlot(time: "10:00", status: .booked, isBookable: false),
+            TimeSlot(time: "11:00", status: .available, isBookable: true),
+            TimeSlot(time: "12:00", status: .available, isBookable: true)
+        ])
+        #expect(courts[1].imageUrl == "https://kustbapadel.ge/court-2.png")
+        #expect(courts[1].timeSlots == [
+            TimeSlot(time: "10:00", status: .booked, isBookable: false),
+            TimeSlot(time: "11:00", status: .booked, isBookable: false),
+            TimeSlot(time: "12:00", status: .available, isBookable: true)
+        ])
+    }
+
     @Test("Fresh cache avoids provider fetch")
     func freshCacheAvoidsProviderFetch() async {
         let provider = MockAvailabilityProvider(result: .success([sampleCompany(courtID: "court-a")]))

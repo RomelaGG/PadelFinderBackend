@@ -46,7 +46,8 @@ final class AvailabilityService: AvailabilityServiceProtocol, Sendable {
             providers: [
                 TbilisiPadelProvider(client: client),
                 PadelIslandProvider(client: client),
-                LemansPadelProvider(client: client)
+                LemansPadelProvider(client: client),
+                KustbaPadelProvider(client: client)
             ],
             cache: AvailabilityCache(ttlSeconds: 120)
         )
