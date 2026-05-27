@@ -109,6 +109,83 @@ struct PadelFinderBackendTests {
         #expect(availability.timeSlots[2] == TimeSlot(time: "23:00", status: .available, isBookable: true))
     }
 
+    @Test("Padel Island mapper maps free, booked, and half-hour slots")
+    func padelIslandMapperMapsSlots() throws {
+        let json = """
+        {
+          "d": {
+            "Id": 8,
+            "Nombre": "EXPO Park Tbilisi",
+            "PartesPorHora": 2,
+            "StrHoraInicio": "09:00",
+            "StrHoraFin": "11:00",
+            "StrFechaHoraInicioReservas": "27/05/2026 08:00",
+            "StrFechaHoraFinReservas": "27/05/2026 23:00",
+            "Columnas": [
+              {
+                "Id": "26",
+                "TextoPrincipal": "EXPO Park No Roof",
+                "TextoSecundario": "-",
+                "CombinaHorariosFijosYLibres": false,
+                "HorariosFijos": [],
+                "Ocupaciones": [
+                  {
+                    "StrHoraInicio": "09:30",
+                    "StrHoraFin": "10:00",
+                    "Clickable": true
+                  }
+                ]
+              }
+            ]
+          }
+        }
+        """.data(using: .utf8)!
+
+        let courts = try PadelIslandMapper.map(data: json, date: "2026-05-27")
+
+        #expect(courts.count == 1)
+        #expect(courts[0].id == "padel-island-8-26")
+        #expect(courts[0].name == "EXPO Park No Roof")
+        #expect(courts[0].timeSlots == [
+            TimeSlot(time: "09:00", status: .available, isBookable: true),
+            TimeSlot(time: "09:30", status: .booked, isBookable: false),
+            TimeSlot(time: "10:00", status: .available, isBookable: true),
+            TimeSlot(time: "10:30", status: .available, isBookable: true)
+        ])
+    }
+
+    @Test("Padel Island mapper keeps overnight slot ordering")
+    func padelIslandMapperKeepsOvernightOrdering() throws {
+        let json = """
+        {
+          "d": {
+            "Id": 8,
+            "Nombre": "EXPO Park Tbilisi",
+            "PartesPorHora": 2,
+            "StrHoraInicio": "23:00",
+            "StrHoraFin": "01:00",
+            "StrFechaHoraInicioReservas": "27/05/2026 08:00",
+            "StrFechaHoraFinReservas": "28/05/2026 02:00",
+            "Columnas": [
+              {
+                "Id": "27",
+                "TextoPrincipal": "EXPO Park Roof",
+                "TextoSecundario": "-",
+                "CombinaHorariosFijosYLibres": false,
+                "HorariosFijos": [],
+                "Ocupaciones": []
+              }
+            ]
+          }
+        }
+        """.data(using: .utf8)!
+
+        let courts = try PadelIslandMapper.map(data: json, date: "2026-05-27")
+
+        #expect(courts.first?.timeSlots.map(\.time) == ["23:00", "23:30", "00:00", "00:30"])
+        #expect(courts.first?.timeSlots.allSatisfy(\.isBookable) == true)
+    }
+
     @Test("Fresh cache avoids provider fetch")
     func freshCacheAvoidsProviderFetch() async {
         let provider = MockAvailabilityProvider(result: .success([sampleCompany(courtID: "court-a")]))

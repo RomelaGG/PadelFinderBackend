@@ -44,7 +44,8 @@ final class AvailabilityService: AvailabilityServiceProtocol, Sendable {
     static func live(client: Client) -> AvailabilityService {
         AvailabilityService(
             providers: [
-                TbilisiPadelProvider(client: client)
+                TbilisiPadelProvider(client: client),
+                PadelIslandProvider(client: client)
             ],
             cache: AvailabilityCache(ttlSeconds: 120)
         )
