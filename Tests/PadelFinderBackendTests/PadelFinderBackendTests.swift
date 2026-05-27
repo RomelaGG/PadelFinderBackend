@@ -186,6 +186,85 @@ struct PadelFinderBackendTests {
         #expect(courts.first?.timeSlots.allSatisfy(\.isBookable) == true)
     }
 
+    @Test("Lemans mapper derives per-court availability")
+    func lemansMapperDerivesPerCourtAvailability() throws {
+        let courtsJSON = """
+        {
+          "courts": [
+            {
+              "id": 1,
+              "court_number": 1,
+              "name": "კორტი #1",
+              "photo": "https://booking.lemanspadel.ge/uploads/courts/court-1.png",
+              "display_order": 1,
+              "duration_prices": { "60": 70 }
+            },
+            {
+              "id": 2,
+              "court_number": 2,
+              "name": "კორტი #2",
+              "photo": "https://booking.lemanspadel.ge/uploads/courts/court-2.png",
+              "display_order": 2,
+              "duration_prices": { "60": 70 }
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let availabilityJSON = """
+        {
+          "date": "2026-05-27",
+          "duration": 60,
+          "slots": [
+            {
+              "start": "09:00",
+              "end": "10:00",
+              "available": true,
+              "available_courts": 1
+            },
+            {
+              "start": "10:00",
+              "end": "11:00",
+              "available": false,
+              "available_courts": 0
+            },
+            {
+              "start": "23:00",
+              "end": "00:00",
+              "available": true,
+              "available_courts": 2
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let courts = try JSONDecoder().decode(LemansCourtsResponse.self, from: courtsJSON).courts
+        let slots = try JSONDecoder().decode(LemansAvailabilityResponse.self, from: availabilityJSON).slots
+        let availability = LemansPadelMapper.map(
+            courts: courts,
+            slots: slots,
+            availableCourtsBySlot: [
+                "09:00": [1],
+                "23:00": [1, 2]
+            ]
+        )
+
+        #expect(availability.count == 2)
+        #expect(availability[0].id == "lemans-padel-1")
+        #expect(availability[0].name == "კორტი #1")
+        #expect(availability[0].pricePerHour == 70)
+        #expect(availability[0].timeSlots == [
+            TimeSlot(time: "09:00", status: .available, isBookable: true),
+            TimeSlot(time: "10:00", status: .booked, isBookable: false),
+            TimeSlot(time: "23:00", status: .available, isBookable: true)
+        ])
+        #expect(availability[1].timeSlots == [
+            TimeSlot(time: "09:00", status: .booked, isBookable: false),
+            TimeSlot(time: "10:00", status: .booked, isBookable: false),
+            TimeSlot(time: "23:00", status: .available, isBookable: true)
+        ])
+    }
+
     @Test("Fresh cache avoids provider fetch")
     func freshCacheAvoidsProviderFetch() async {
         let provider = MockAvailabilityProvider(result: .success([sampleCompany(courtID: "court-a")]))
