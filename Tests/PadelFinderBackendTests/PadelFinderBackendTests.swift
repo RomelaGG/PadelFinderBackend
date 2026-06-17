@@ -70,6 +70,84 @@ struct PadelFinderBackendTests {
         #expect(requestedDates.isEmpty)
     }
 
+    @Test("Company availability route returns the matching company")
+    func companyAvailabilityRouteReturnsMatchingCompany() async throws {
+        let service = MockAvailabilityService(companies: [
+            sampleCompany(companyID: "company-a", courtID: "court-a"),
+            sampleCompany(companyID: "company-b", courtID: "court-b")
+        ])
+
+        try await withApp(configure: { app async throws in
+            try routes(app, availabilityService: service)
+        }) { app in
+            try await app.testing().test(.GET, "availability/company/company-b?date=2026-05-27", afterResponse: { res async throws in
+                #expect(res.status == .ok)
+
+                let response = try res.content.decode(CompanyAvailabilityResponse.self)
+                #expect(response.date == "2026-05-27")
+                #expect(response.company.id == "company-b")
+                #expect(response.company.courts.first?.id == "court-b")
+            })
+        }
+
+        let requestedDates = await service.requestedDates()
+        #expect(requestedDates == ["2026-05-27"])
+    }
+
+    @Test("Company availability route returns 404 for unknown company")
+    func companyAvailabilityRouteReturnsNotFoundForUnknownCompany() async throws {
+        let service = MockAvailabilityService(companies: [sampleCompany()])
+
+        try await withApp(configure: { app async throws in
+            try routes(app, availabilityService: service)
+        }) { app in
+            try await app.testing().test(.GET, "availability/company/does-not-exist?date=2026-05-27", afterResponse: { res async in
+                #expect(res.status == .notFound)
+            })
+        }
+    }
+
+    @Test("Company availability route rejects invalid date")
+    func companyAvailabilityRouteRejectsInvalidDate() async throws {
+        let service = MockAvailabilityService(companies: [sampleCompany()])
+
+        try await withApp(configure: { app async throws in
+            try routes(app, availabilityService: service)
+        }) { app in
+            try await app.testing().test(.GET, "availability/company/company-a?date=2026-99-99", afterResponse: { res async in
+                #expect(res.status == .badRequest)
+            })
+        }
+
+        let requestedDates = await service.requestedDates()
+        #expect(requestedDates.isEmpty)
+    }
+
+    @Test("Company availability serves a fresh cache without refetching")
+    func companyAvailabilityServesFreshCache() async {
+        let provider = MockAvailabilityProvider(result: .success([
+            sampleCompany(companyID: "company-a", courtID: "court-a"),
+            sampleCompany(companyID: "company-b", courtID: "court-b")
+        ]))
+        let dateProvider = TestDateProvider(Date(timeIntervalSince1970: 0))
+        let service = AvailabilityService(
+            providers: [provider],
+            cache: AvailabilityCache(ttlSeconds: 120),
+            dateProvider: dateProvider
+        )
+
+        // First call populates the whole-day cache from the provider.
+        _ = await service.availability(for: "2026-05-27", logger: Logger(label: "test"))
+        // Second call (per-company) must reuse the cache, not refetch.
+        let company = await service.companyAvailability(forCompany: "company-b", date: "2026-05-27", logger: Logger(label: "test"))
+
+        #expect(company?.id == "company-b")
+        #expect(company?.courts.first?.id == "court-b")
+
+        let fetchCount = await provider.fetchCount()
+        #expect(fetchCount == 1)
+    }
+
     @Test("Tbilisi Padel mapper maps free, booked, and overnight slots")
     func tbilisiPadelMapperMapsSlots() throws {
         let json = """
@@ -511,6 +589,11 @@ private actor MockAvailabilityService: AvailabilityServiceProtocol {
     func availability(for date: String, logger: Logger) async -> AvailabilityResponse {
         dates.append(date)
         return AvailabilityResponse(date: date, companies: companies)
+    }
+
+    func companyAvailability(forCompany companyId: String, date: String, logger: Logger) async -> PadelCompanyAvailability? {
+        dates.append(date)
+        return companies.first { $0.id == companyId }
     }
 
     func requestedDates() -> [String] {

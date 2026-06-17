@@ -9,6 +9,7 @@ protocol AvailabilityProvider: Sendable {
 
 protocol AvailabilityServiceProtocol: Sendable {
     func availability(for date: String, logger: Logger) async -> AvailabilityResponse
+    func companyAvailability(forCompany companyId: String, date: String, logger: Logger) async -> PadelCompanyAvailability?
 }
 
 protocol DateProviding: Sendable {
@@ -54,10 +55,22 @@ final class AvailabilityService: AvailabilityServiceProtocol, Sendable {
     }
 
     func availability(for date: String, logger: Logger) async -> AvailabilityResponse {
+        let companies = await companies(for: date, logger: logger)
+        return AvailabilityResponse(date: date, companies: companies)
+    }
+
+    func companyAvailability(forCompany companyId: String, date: String, logger: Logger) async -> PadelCompanyAvailability? {
+        let companies = await companies(for: date, logger: logger)
+        return companies.first { $0.id == companyId }
+    }
+
+    /// Returns every company for `date`, serving a fresh cache entry when present
+    /// and otherwise refreshing (and re-caching) the whole day from the providers.
+    private func companies(for date: String, logger: Logger) async -> [PadelCompanyAvailability] {
         let now = await dateProvider.now()
 
         if let cachedCompanies = await cache.freshValue(for: date, now: now) {
-            return AvailabilityResponse(date: date, companies: cachedCompanies)
+            return cachedCompanies
         }
 
         var companies: [PadelCompanyAvailability] = []
@@ -100,6 +113,6 @@ final class AvailabilityService: AvailabilityServiceProtocol, Sendable {
             await cache.store(companies, for: date, now: now)
         }
 
-        return AvailabilityResponse(date: date, companies: companies)
+        return companies
     }
 }

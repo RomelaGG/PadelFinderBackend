@@ -5,6 +5,11 @@ struct AvailabilityResponse: Content, Equatable, Sendable {
     let companies: [PadelCompanyAvailability]
 }
 
+struct CompanyAvailabilityResponse: Content, Equatable, Sendable {
+    let date: String
+    let company: PadelCompanyAvailability
+}
+
 struct PadelCompanyAvailability: Content, Equatable, Sendable {
     let id: String
     let name: String
