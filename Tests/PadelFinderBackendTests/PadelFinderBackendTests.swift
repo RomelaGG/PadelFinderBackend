@@ -30,6 +30,7 @@ struct PadelFinderBackendTests {
                 #expect(response.date == "2026-05-27")
                 #expect(response.companies.count == 1)
                 #expect(response.companies.first?.id == "company-a")
+                #expect(response.companies.first?.logo == "https://example.com/logo.png")
                 #expect(response.companies.first?.courts.first?.id == "court-a")
             })
         }
@@ -148,7 +149,7 @@ struct PadelFinderBackendTests {
         #expect(fetchCount == 1)
     }
 
-    @Test("Tbilisi Padel mapper maps free, booked, and overnight slots")
+    @Test("Tbilisi Padel mapper fills omitted unavailable slots")
     func tbilisiPadelMapperMapsSlots() throws {
         let json = """
         {
@@ -181,10 +182,27 @@ struct PadelFinderBackendTests {
         let court = TbilisiPadelCourt.defaultCourts[0]
         let availability = try TbilisiPadelMapper.map(data: json, date: "2026-05-27", court: court)
 
-        #expect(availability.timeSlots.count == 3)
+        #expect(availability.timeSlots.map(\.time) == [
+            "09:00",
+            "10:00",
+            "11:00",
+            "12:00",
+            "13:00",
+            "14:00",
+            "15:00",
+            "16:00",
+            "17:00",
+            "18:00",
+            "19:00",
+            "20:00",
+            "21:00",
+            "22:00",
+            "23:00"
+        ])
         #expect(availability.timeSlots[0] == TimeSlot(time: "09:00", status: .available, isBookable: true))
         #expect(availability.timeSlots[1] == TimeSlot(time: "10:00", status: .booked, isBookable: false))
-        #expect(availability.timeSlots[2] == TimeSlot(time: "23:00", status: .available, isBookable: true))
+        #expect(availability.timeSlots[2] == TimeSlot(time: "11:00", status: .booked, isBookable: false))
+        #expect(availability.timeSlots[14] == TimeSlot(time: "23:00", status: .available, isBookable: true))
     }
 
     @Test("Padel Island mapper maps free, booked, and half-hour slots")
@@ -474,6 +492,13 @@ struct PadelFinderBackendTests {
         ])
     }
 
+    @Test("Kustba date resolver shifts overnight slots to the next booking date")
+    func kustbaDateResolverShiftsOvernightSlots() {
+        #expect(KustbaBookingDateResolver.bookingDate(for: "2026-06-17", time: "23:00", startHour: 9) == "2026-06-17")
+        #expect(KustbaBookingDateResolver.bookingDate(for: "2026-06-17", time: "00:00", startHour: 9) == "2026-06-18")
+        #expect(KustbaBookingDateResolver.bookingDate(for: "2026-02-28", time: "01:00", startHour: 9) == "2026-03-01")
+    }
+
     @Test("Fresh cache avoids provider fetch")
     func freshCacheAvoidsProviderFetch() async {
         let provider = MockAvailabilityProvider(result: .success([sampleCompany(courtID: "court-a")]))
@@ -622,6 +647,7 @@ private func sampleCompany(companyID: String = "company-a", courtID: String = "c
         id: companyID,
         name: "Padel Company",
         website: "https://example.com",
+        logo: "https://example.com/logo.png",
         courts: [sampleCourt(id: courtID)]
     )
 }

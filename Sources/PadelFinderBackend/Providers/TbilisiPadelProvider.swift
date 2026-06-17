@@ -6,6 +6,7 @@ struct TbilisiPadelProvider: AvailabilityProvider {
     let id = "tbilisi-padel"
     private let name = "Tbilisi Padel"
     private let website = "https://tbilisipadel.ge"
+    private let logo = "https://tbilisipadel.ge/wp-content/uploads/2024/06/tbilisi-padel-logo.svg"
 
     private let client: Client
     private let publicPageURL: URI
@@ -65,6 +66,7 @@ struct TbilisiPadelProvider: AvailabilityProvider {
                 id: id,
                 name: name,
                 website: website,
+                logo: logo,
                 courts: courtResults.sorted { $0.id < $1.id }
             )
         ]
@@ -175,6 +177,24 @@ struct TbilisiPadelCourt: Sendable, Equatable {
 }
 
 enum TbilisiPadelMapper {
+    private static let expectedSlotTimes = [
+        "09:00",
+        "10:00",
+        "11:00",
+        "12:00",
+        "13:00",
+        "14:00",
+        "15:00",
+        "16:00",
+        "17:00",
+        "18:00",
+        "19:00",
+        "20:00",
+        "21:00",
+        "22:00",
+        "23:00"
+    ]
+
     static func map(data: ByteBuffer, date: String, court: TbilisiPadelCourt) throws -> CourtAvailability {
         var body = data
         guard let bytes = body.readBytes(length: body.readableBytes) else {
@@ -188,7 +208,6 @@ enum TbilisiPadelMapper {
         let response = try JSONDecoder().decode(TbilisiPadelTimeslotResponse.self, from: data)
         let slots = response.workingDetails[date, default: []]
             .map(mapSlot)
-            .sorted { $0.time < $1.time }
 
         return CourtAvailability(
             id: court.id,
@@ -198,7 +217,7 @@ enum TbilisiPadelMapper {
             rating: court.rating,
             imageUrl: court.imageUrl,
             totalCourts: court.totalCourts,
-            timeSlots: slots
+            timeSlots: fillUnavailableSlots(slots)
         )
     }
 
@@ -212,6 +231,37 @@ enum TbilisiPadelMapper {
             status: isBookable ? .available : .booked,
             isBookable: isBookable
         )
+    }
+
+    private static func fillUnavailableSlots(_ slots: [TimeSlot]) -> [TimeSlot] {
+        let slotsByTime = Dictionary(slots.map { ($0.time, $0) }, uniquingKeysWith: { first, _ in first })
+        let expectedSlots = expectedSlotTimes.map { time in
+            slotsByTime[time] ?? TimeSlot(time: time, status: .booked, isBookable: false)
+        }
+        let extraSlots = slots
+            .filter { !expectedSlotTimes.contains($0.time) }
+            .sorted { slotSortKey($0.time) < slotSortKey($1.time) }
+
+        return expectedSlots + extraSlots
+    }
+
+    private static func slotSortKey(_ time: String) -> Int {
+        guard let minutes = minutes(from: time) else {
+            return Int.max
+        }
+
+        return minutes < 9 * 60 ? minutes + 24 * 60 : minutes
+    }
+
+    private static func minutes(from time: String) -> Int? {
+        let parts = time.split(separator: ":")
+        guard parts.count == 2,
+              let hour = Int(parts[0]),
+              let minute = Int(parts[1]) else {
+            return nil
+        }
+
+        return hour * 60 + minute
     }
 }
 

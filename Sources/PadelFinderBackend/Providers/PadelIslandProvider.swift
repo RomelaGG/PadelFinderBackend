@@ -7,6 +7,7 @@ struct PadelIslandProvider: AvailabilityProvider {
 
     private let name = "Padel Island"
     private let website = "https://www.padelisland.ge/"
+    private let logo = "https://www.padelisland.ge/flat_logo_white_eng.svg"
     private let client: Client
     private let gridPageURL: URI
     private let calendarsURL: URI
@@ -92,6 +93,7 @@ struct PadelIslandProvider: AvailabilityProvider {
                 id: id,
                 name: name,
                 website: website,
+                logo: logo,
                 courts: courts.sorted { lhs, rhs in
                     if lhs.name == rhs.name {
                         return lhs.id < rhs.id

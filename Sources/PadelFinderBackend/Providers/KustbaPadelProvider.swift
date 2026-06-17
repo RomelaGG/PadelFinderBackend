@@ -6,19 +6,20 @@ struct KustbaPadelProvider: AvailabilityProvider {
     let id = "kustba-padel"
 
     private let name = "Kus Tba Padel"
-    private let website = "https://kustbapadel.ge/en/reservation/"
+    private let website = "https://kustbapadel.ge/en/booking/"
+    private let logo = "https://kustbapadel.ge/wp-content/uploads/2025/09/Asset-1CG.png"
     private let address = "Kus Tba, Tbilisi"
     private let client: Client
-    private let reservationPageURL: URI
+    private let bookingPageURL: URI
     private let ajaxURL: URI
 
     init(
         client: Client,
-        reservationPageURL: URI = URI(string: "https://kustbapadel.ge/en/reservation/"),
+        bookingPageURL: URI = URI(string: "https://kustbapadel.ge/en/booking/"),
         ajaxURL: URI = URI(string: "https://kustbapadel.ge/wp-admin/admin-ajax.php")
     ) {
         self.client = client
-        self.reservationPageURL = reservationPageURL
+        self.bookingPageURL = bookingPageURL
         self.ajaxURL = ajaxURL
     }
 
@@ -39,6 +40,7 @@ struct KustbaPadelProvider: AvailabilityProvider {
             date: date,
             slots: slots.data,
             nonce: pageContext.nonce,
+            startHour: pageContext.startHour,
             tabID: tabID,
             sessionCookie: pageContext.sessionCookie
         )
@@ -58,13 +60,14 @@ struct KustbaPadelProvider: AvailabilityProvider {
                 id: id,
                 name: name,
                 website: website,
+                logo: logo,
                 courts: courts
             )
         ]
     }
 
     private func fetchPageContext() async throws -> KustbaPageContext {
-        let response = try await client.get(reservationPageURL)
+        let response = try await client.get(bookingPageURL)
         guard response.status == .ok else {
             throw KustbaPadelError.unexpectedStatus(response.status)
         }
@@ -81,6 +84,7 @@ struct KustbaPadelProvider: AvailabilityProvider {
 
         return KustbaPageContext(
             nonce: nonce,
+            startHour: KustbaPageContextExtractor.extractStartHour(from: html) ?? 9,
             sessionCookie: KustbaPageContextExtractor.extractSessionCookie(from: response.headers)
         )
     }
@@ -89,6 +93,7 @@ struct KustbaPadelProvider: AvailabilityProvider {
         date: String,
         slots: [KustbaSlot],
         nonce: String,
+        startHour: Int,
         tabID: String,
         sessionCookie: String?
     ) async throws -> [String: [KustbaCourt]] {
@@ -100,7 +105,7 @@ struct KustbaPadelProvider: AvailabilityProvider {
                     let response: KustbaAJAXResponse<KustbaCourtsData> = try await postForm(
                         [
                             ("action", "get_available_courts"),
-                            ("date", date),
+                            ("date", KustbaBookingDateResolver.bookingDate(for: date, time: slot.time, startHour: startHour)),
                             ("time", slot.time),
                             ("tab_id", tabID),
                             ("nonce", nonce)
@@ -127,7 +132,7 @@ struct KustbaPadelProvider: AvailabilityProvider {
         var headers = HTTPHeaders()
         headers.add(name: .contentType, value: "application/x-www-form-urlencoded; charset=UTF-8")
         headers.add(name: "Origin", value: "https://kustbapadel.ge")
-        headers.add(name: "Referer", value: "https://kustbapadel.ge/en/reservation/")
+        headers.add(name: "Referer", value: "https://kustbapadel.ge/en/booking/")
         headers.add(name: "X-Requested-With", value: "XMLHttpRequest")
         if let sessionCookie {
             headers.add(name: "Cookie", value: sessionCookie)
@@ -221,6 +226,18 @@ struct KustbaPageContextExtractor {
         firstCapture(pattern: #""nonce"\s*:\s*"([^"]+)""#, in: html)
     }
 
+    static func extractStartHour(from html: String) -> Int? {
+        if let stringValue = firstCapture(pattern: #""start_hour"\s*:\s*"(\d+)""#, in: html) {
+            return Int(stringValue)
+        }
+
+        if let numberValue = firstCapture(pattern: #""start_hour"\s*:\s*(\d+)"#, in: html) {
+            return Int(numberValue)
+        }
+
+        return nil
+    }
+
     static func extractSessionCookie(from headers: HTTPHeaders) -> String? {
         for setCookie in headers["Set-Cookie"] {
             let cookie = setCookie.split(separator: ";", maxSplits: 1).first.map(String.init) ?? ""
@@ -245,6 +262,47 @@ struct KustbaPageContextExtractor {
         }
 
         return String(string[captureRange])
+    }
+}
+
+enum KustbaBookingDateResolver {
+    static func bookingDate(for date: String, time: String, startHour: Int) -> String {
+        guard let hour = hour(from: time), hour < startHour else {
+            return date
+        }
+
+        return addDays(1, to: date) ?? date
+    }
+
+    private static func hour(from time: String) -> Int? {
+        let parts = time.split(separator: ":")
+        guard let hourPart = parts.first else {
+            return nil
+        }
+
+        return Int(hourPart)
+    }
+
+    private static func addDays(_ days: Int, to date: String) -> String? {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+
+        guard let parsedDate = formatter.date(from: date),
+              let adjustedDate = calendar.date(byAdding: .day, value: days, to: parsedDate) else {
+            return nil
+        }
+
+        return formatter.string(from: adjustedDate)
+    }
+
+    private static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tbilisi") ?? .current
+        return calendar
     }
 }
 
@@ -306,6 +364,7 @@ struct KustbaCourt: Decodable, Sendable {
 
 private struct KustbaPageContext: Sendable {
     let nonce: String
+    let startHour: Int
     let sessionCookie: String?
 }
 
