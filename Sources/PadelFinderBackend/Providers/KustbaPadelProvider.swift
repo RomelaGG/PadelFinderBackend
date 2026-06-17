@@ -7,7 +7,7 @@ struct KustbaPadelProvider: AvailabilityProvider {
 
     private let name = "Kus Tba Padel"
     private let website = "https://kustbapadel.ge/en/booking/"
-    private let logo = "https://kustbapadel.ge/wp-content/uploads/2025/09/Asset-1CG.png"
+    private let logo = "/logos/kustba-padel.png"
     private let address = "Kus Tba, Tbilisi"
     private let client: Client
     private let bookingPageURL: URI

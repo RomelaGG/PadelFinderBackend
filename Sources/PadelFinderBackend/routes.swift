@@ -13,7 +13,12 @@ func routes(_ app: Application, availabilityService injectedAvailabilityService:
 
     app.get("availability") { req async throws -> AvailabilityResponse in
         let date = try resolveDate(from: req)
-        return await availabilityService.availability(for: date, logger: req.logger)
+        let response = await availabilityService.availability(for: date, logger: req.logger)
+        let baseURL = req.application.publicBaseURL
+        return AvailabilityResponse(
+            date: response.date,
+            companies: response.companies.map { $0.resolvingLogoURL(baseURL: baseURL) }
+        )
     }
 
     app.get("availability", "company", ":companyId") { req async throws -> CompanyAvailabilityResponse in
@@ -28,7 +33,10 @@ func routes(_ app: Application, availabilityService injectedAvailabilityService:
             throw Abort(.notFound, reason: "No availability for company \(companyId) on \(date)")
         }
 
-        return CompanyAvailabilityResponse(date: date, company: company)
+        return CompanyAvailabilityResponse(
+            date: date,
+            company: company.resolvingLogoURL(baseURL: req.application.publicBaseURL)
+        )
     }
 }
 
@@ -46,4 +54,23 @@ private func resolveDate(from req: Request) throws -> String {
     }
 
     return validatedDate
+}
+
+private extension PadelCompanyAvailability {
+    /// Returns a copy with a relative logo path (e.g. `/logos/x.png`) expanded to
+    /// an absolute URL against the configured API base URL. Absolute logo URLs are
+    /// left untouched.
+    func resolvingLogoURL(baseURL: String) -> PadelCompanyAvailability {
+        guard let logo, logo.hasPrefix("/") else {
+            return self
+        }
+
+        return PadelCompanyAvailability(
+            id: id,
+            name: name,
+            website: website,
+            logo: baseURL + logo,
+            courts: courts
+        )
+    }
 }

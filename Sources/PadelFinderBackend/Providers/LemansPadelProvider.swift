@@ -7,7 +7,7 @@ struct LemansPadelProvider: AvailabilityProvider {
 
     private let name = "Lemans Padel"
     private let website = "https://lemanspadel.ge/"
-    private let logo = "https://lemanspadel.ge/wp-content/uploads/2024/11/Lemans-Logo-scaled.png"
+    private let logo = "/logos/lemans-padel.png"
     private let client: Client
     private let apiBaseURL: String
     private let durationMinutes: Int

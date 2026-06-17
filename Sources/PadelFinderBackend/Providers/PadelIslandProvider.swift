@@ -7,7 +7,7 @@ struct PadelIslandProvider: AvailabilityProvider {
 
     private let name = "Padel Island"
     private let website = "https://www.padelisland.ge/"
-    private let logo = "https://www.padelisland.ge/flat_logo_white_eng.svg"
+    private let logo = "/logos/padel-island.png"
     private let client: Client
     private let gridPageURL: URI
     private let calendarsURL: URI

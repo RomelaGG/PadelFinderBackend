@@ -39,6 +39,29 @@ struct PadelFinderBackendTests {
         #expect(requestedDates == ["2026-05-27"])
     }
 
+    @Test("Availability route expands backend logo paths")
+    func availabilityRouteExpandsBackendLogoPaths() async throws {
+        let service = MockAvailabilityService(companies: [
+            sampleCompany(logo: "/logos/company.png")
+        ])
+
+        try await withApp(configure: { app async throws in
+            app.publicBaseURL = "https://api.padelfinder.test"
+            try routes(app, availabilityService: service)
+        }) { app in
+            try await app.testing().test(
+                .GET,
+                "availability?date=2026-05-27",
+                afterResponse: { res async throws in
+                    #expect(res.status == .ok)
+
+                    let response = try res.content.decode(AvailabilityResponse.self)
+                    #expect(response.companies.first?.logo == "https://api.padelfinder.test/logos/company.png")
+                }
+            )
+        }
+    }
+
     @Test("Availability route defaults missing date to today in Tbilisi")
     func availabilityRouteDefaultsMissingDate() async throws {
         let service = MockAvailabilityService(companies: [])
@@ -642,12 +665,16 @@ private actor TestDateProvider: DateProviding {
     }
 }
 
-private func sampleCompany(companyID: String = "company-a", courtID: String = "court-a") -> PadelCompanyAvailability {
+private func sampleCompany(
+    companyID: String = "company-a",
+    courtID: String = "court-a",
+    logo: String? = "https://example.com/logo.png"
+) -> PadelCompanyAvailability {
     PadelCompanyAvailability(
         id: companyID,
         name: "Padel Company",
         website: "https://example.com",
-        logo: "https://example.com/logo.png",
+        logo: logo,
         courts: [sampleCourt(id: courtID)]
     )
 }

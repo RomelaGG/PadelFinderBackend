@@ -6,7 +6,7 @@ struct TbilisiPadelProvider: AvailabilityProvider {
     let id = "tbilisi-padel"
     private let name = "Tbilisi Padel"
     private let website = "https://tbilisipadel.ge"
-    private let logo = "https://tbilisipadel.ge/wp-content/uploads/2024/06/tbilisi-padel-logo.svg"
+    private let logo = "/logos/tbilisi-padel.png"
 
     private let client: Client
     private let publicPageURL: URI
