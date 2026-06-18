@@ -7,7 +7,7 @@ struct PadelHubProvider: AvailabilityProvider {
 
     private let name = "Padel Hub"
     private let website = "https://www.padelhub.ge/booking"
-    private let logo = "https://www.padelhub.ge/favicon.svg"
+    private let logo = "/logos/padel-hub.png"
     private let coverImage = "https://www.padelhub.ge/og-image.jpg"
     private let address = "39 Petre Kavtaradze St, Tbilisi"
     private let client: any Client

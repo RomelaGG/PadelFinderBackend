@@ -16,6 +16,16 @@ struct PadelFinderBackendTests {
         }
     }
 
+    @Test("Padel Hub logo asset is publicly served")
+    func padelHubLogoAssetIsServed() async throws {
+        try await withApp(configure: configure) { app in
+            try await app.testing().test(.GET, "logos/padel-hub.png", afterResponse: { res async in
+                #expect(res.status == .ok)
+                #expect(res.body.readableBytes > 0)
+            })
+        }
+    }
+
     @Test("Availability route returns selected date")
     func availabilityRouteReturnsSelectedDate() async throws {
         let service = MockAvailabilityService(companies: [sampleCompany()])
