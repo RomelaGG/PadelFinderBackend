@@ -170,7 +170,7 @@ enum PadelHubMapper {
         ),
         PadelHubPriceWindow(
             idSuffix: "15-00",
-            label: "15:00 - 00:00",
+            label: "15:00 - 01:00",
             pricePerHour: 60,
             slotTimes: [
                 "15:00",

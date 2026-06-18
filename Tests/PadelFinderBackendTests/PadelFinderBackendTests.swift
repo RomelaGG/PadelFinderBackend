@@ -649,7 +649,7 @@ struct PadelFinderBackendTests {
         #expect(availability[0].timeSlots[5] == TimeSlot(time: "13:00", status: .available, isBookable: true))
 
         #expect(availability[1].id == "padel-hub-0a0a2ddd-4f0d-4a66-a5c3-2d08bcf5eebd-15-00")
-        #expect(availability[1].name == "Open Padel Court 15:00 - 00:00")
+        #expect(availability[1].name == "Open Padel Court 15:00 - 01:00")
         #expect(availability[1].address == "39 Petre Kavtaradze St, Tbilisi")
         #expect(availability[1].pricePerHour == 60)
         #expect(availability[1].timeSlots.map(\.time) == [
