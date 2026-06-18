@@ -590,6 +590,73 @@ struct PadelFinderBackendTests {
         #expect(PadelGldaniDate.pricePerHour(for: "2026-06-20") == 60)
     }
 
+    @Test("Padel Hub mapper splits court availability by price window")
+    func padelHubMapperSplitsCourtAvailabilityByPriceWindow() throws {
+        let now = try #require(PadelHubDate.slotDate(selectedDate: "2026-06-20", time: "09:30"))
+        let courts = [
+            PadelHubCourt(
+                id: "0a0a2ddd-4f0d-4a66-a5c3-2d08bcf5eebd",
+                name: "court_padel_open",
+                description: "court_padel_open_desc",
+                sportType: "padel",
+                imageURL: "/courts/padel-open.jpg",
+                isActive: true,
+                createdAt: "2026-05-14T04:15:12.07446+00:00"
+            )
+        ]
+
+        let availability = PadelHubMapper.map(
+            courts: courts,
+            unavailableBookingsByCourtID: [
+                "0a0a2ddd-4f0d-4a66-a5c3-2d08bcf5eebd": [
+                    PadelHubBookingAvailability(timeSlot: "10:00", bookingDate: "2026-06-20", status: "confirmed"),
+                    PadelHubBookingAvailability(timeSlot: "11:00", bookingDate: "2026-06-20", status: "cancelled"),
+                    PadelHubBookingAvailability(timeSlot: "13:00", bookingDate: "2026-06-20", status: "cancelled")
+                ]
+            ],
+            selectedDate: "2026-06-20",
+            address: "39 Petre Kavtaradze St, Tbilisi",
+            now: now
+        )
+
+        #expect(availability.count == 2)
+        #expect(availability[0].id == "padel-hub-0a0a2ddd-4f0d-4a66-a5c3-2d08bcf5eebd-08-15")
+        #expect(availability[0].name == "Open Padel Court 08:00 - 15:00")
+        #expect(availability[0].address == "39 Petre Kavtaradze St, Tbilisi")
+        #expect(availability[0].pricePerHour == 40)
+        #expect(availability[0].timeSlots.map(\.time) == [
+            "08:00",
+            "09:00",
+            "10:00",
+            "11:00",
+            "12:00",
+            "13:00",
+            "14:00"
+        ])
+        #expect(availability[0].timeSlots[0] == TimeSlot(time: "08:00", status: .available, isBookable: true))
+        #expect(availability[0].timeSlots[2] == TimeSlot(time: "10:00", status: .booked, isBookable: false))
+        #expect(availability[0].timeSlots[3] == TimeSlot(time: "11:00", status: .booked, isBookable: false))
+        #expect(availability[0].timeSlots[5] == TimeSlot(time: "13:00", status: .available, isBookable: true))
+
+        #expect(availability[1].id == "padel-hub-0a0a2ddd-4f0d-4a66-a5c3-2d08bcf5eebd-15-00")
+        #expect(availability[1].name == "Open Padel Court 15:00 - 00:00")
+        #expect(availability[1].address == "39 Petre Kavtaradze St, Tbilisi")
+        #expect(availability[1].pricePerHour == 60)
+        #expect(availability[1].timeSlots.map(\.time) == [
+            "15:00",
+            "16:00",
+            "17:00",
+            "18:00",
+            "19:00",
+            "20:00",
+            "21:00",
+            "22:00",
+            "23:00",
+            "00:00"
+        ])
+        #expect(availability[1].timeSlots[9] == TimeSlot(time: "00:00", status: .available, isBookable: true))
+    }
+
     @Test("Fresh cache avoids provider fetch")
     func freshCacheAvoidsProviderFetch() async {
         let provider = MockAvailabilityProvider(result: .success([sampleCompany(courtID: "court-a")]))

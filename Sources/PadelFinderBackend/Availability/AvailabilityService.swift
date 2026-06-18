@@ -49,7 +49,8 @@ final class AvailabilityService: AvailabilityServiceProtocol, Sendable {
                 PadelIslandProvider(client: client),
                 LemansPadelProvider(client: client),
                 KustbaPadelProvider(client: client),
-                PadelGldaniProvider(client: client)
+                PadelGldaniProvider(client: client),
+                PadelHubProvider(client: client)
             ],
             cache: AvailabilityCache(ttlSeconds: 120)
         )
