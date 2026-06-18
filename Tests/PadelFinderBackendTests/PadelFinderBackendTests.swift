@@ -522,6 +522,74 @@ struct PadelFinderBackendTests {
         #expect(KustbaBookingDateResolver.bookingDate(for: "2026-02-28", time: "01:00", startHour: 9) == "2026-03-01")
     }
 
+    @Test("Padel Gldani parser extracts WooCommerce booking block times")
+    func padelGldaniParserExtractsBookingBlockTimes() {
+        let html = """
+        <div class="wc-bookings-start-time-container" data-product-id="72">
+          <select id="wc-bookings-form-start-time" name="start_time">
+            <option value="0">დაწყება</option>
+            <option data-block="0800" value="2026-06-20T08:00:00+0300">08:00</option>
+            <option data-block="2300" value="2026-06-20T23:00:00+0300">23:00</option>
+            <option data-block="0000" value="2026-06-21T00:00:00+0300">00:00</option>
+          </select>
+        </div>
+        """
+
+        #expect(PadelGldaniBlocksParser.availableTimes(from: html) == ["00:00", "08:00", "23:00"])
+    }
+
+    @Test("Padel Gldani mapper builds business-day slots from same and next day availability")
+    func padelGldaniMapperBuildsBusinessDaySlots() {
+        let availableTimes = PadelGldaniMapper.businessDayAvailableTimes(
+            sameDayTimes: ["00:00", "08:00", "23:00"],
+            nextDayTimes: ["00:00", "01:00", "08:00"],
+            startHour: 8
+        )
+
+        let courts = PadelGldaniMapper.map(
+            courts: [PadelGldaniCourt(productID: 72, name: "Court I", displayOrder: 1)],
+            availableTimesByProductID: [72: availableTimes],
+            date: "2026-06-19",
+            address: "56 Ilia Vekua St"
+        )
+
+        #expect(courts.count == 1)
+        #expect(courts[0].id == "padel-gldani-72")
+        #expect(courts[0].name == "Court I")
+        #expect(courts[0].address == "56 Ilia Vekua St")
+        #expect(courts[0].pricePerHour == 50)
+        #expect(courts[0].timeSlots.map(\.time) == [
+            "08:00",
+            "09:00",
+            "10:00",
+            "11:00",
+            "12:00",
+            "13:00",
+            "14:00",
+            "15:00",
+            "16:00",
+            "17:00",
+            "18:00",
+            "19:00",
+            "20:00",
+            "21:00",
+            "22:00",
+            "23:00",
+            "00:00",
+            "01:00"
+        ])
+        #expect(courts[0].timeSlots[0] == TimeSlot(time: "08:00", status: .available, isBookable: true))
+        #expect(courts[0].timeSlots[1] == TimeSlot(time: "09:00", status: .booked, isBookable: false))
+        #expect(courts[0].timeSlots[15] == TimeSlot(time: "23:00", status: .available, isBookable: true))
+        #expect(courts[0].timeSlots[16] == TimeSlot(time: "00:00", status: .available, isBookable: true))
+        #expect(courts[0].timeSlots[17] == TimeSlot(time: "01:00", status: .available, isBookable: true))
+    }
+
+    @Test("Padel Gldani weekend price is 60 GEL")
+    func padelGldaniWeekendPrice() {
+        #expect(PadelGldaniDate.pricePerHour(for: "2026-06-20") == 60)
+    }
+
     @Test("Fresh cache avoids provider fetch")
     func freshCacheAvoidsProviderFetch() async {
         let provider = MockAvailabilityProvider(result: .success([sampleCompany(courtID: "court-a")]))
