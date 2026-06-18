@@ -8,6 +8,7 @@ struct KustbaPadelProvider: AvailabilityProvider {
     private let name = "Kus Tba Padel"
     private let website = "https://kustbapadel.ge/en/booking/"
     private let logo = "/logos/kustba-padel.png"
+    private let coverImage = "https://kustbapadel.ge/wp-content/uploads/2025/10/OGP_5772-copy.jpg"
     private let address = "Kus Tba, Tbilisi"
     private let client: Client
     private let bookingPageURL: URI
@@ -61,6 +62,7 @@ struct KustbaPadelProvider: AvailabilityProvider {
                 name: name,
                 website: website,
                 logo: logo,
+                coverImage: coverImage,
                 courts: courts
             )
         ]
@@ -187,7 +189,6 @@ enum KustbaPadelMapper {
                 address: address,
                 pricePerHour: court.price,
                 rating: nil,
-                imageUrl: court.imageURL,
                 totalCourts: 1,
                 timeSlots: slots.map { slot in
                     let matchingCourt = courtsBySlot[slot.time]?.first { $0.id == court.id }
@@ -325,25 +326,14 @@ struct KustbaCourt: Decodable, Sendable {
     let title: String
     let price: Int?
     let courtNumber: Int
-    let image: String?
     let status: String
     let reason: String?
-
-    var imageURL: String? {
-        guard let image,
-              !image.contains("via.placeholder.com") else {
-            return nil
-        }
-
-        return image
-    }
 
     private enum CodingKeys: String, CodingKey {
         case id
         case title
         case price
         case courtNumber = "court_number"
-        case image
         case status
         case reason
     }
@@ -356,7 +346,6 @@ struct KustbaCourt: Decodable, Sendable {
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? "Court #\(decodedID)"
         price = try container.decodeIfPresent(KustbaFlexibleInt.self, forKey: .price)?.value
         courtNumber = try container.decodeIfPresent(KustbaFlexibleInt.self, forKey: .courtNumber)?.value ?? decodedID
-        image = try container.decodeIfPresent(String.self, forKey: .image)
         status = try container.decodeIfPresent(String.self, forKey: .status) ?? ""
         reason = try container.decodeIfPresent(String.self, forKey: .reason)
     }

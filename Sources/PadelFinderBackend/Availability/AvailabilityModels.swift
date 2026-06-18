@@ -15,6 +15,7 @@ struct PadelCompanyAvailability: Content, Equatable, Sendable {
     let name: String
     let website: String?
     let logo: String?
+    let coverImage: String?
     let courts: [CourtAvailability]
 }
 
@@ -24,7 +25,6 @@ struct CourtAvailability: Content, Equatable, Sendable {
     let address: String?
     let pricePerHour: Int?
     let rating: Double?
-    let imageUrl: String?
     let totalCourts: Int
     let timeSlots: [TimeSlot]
 }

@@ -8,6 +8,7 @@ struct PadelIslandProvider: AvailabilityProvider {
     private let name = "Padel Island"
     private let website = "https://www.padelisland.ge/"
     private let logo = "/logos/padel-island.png"
+    private let coverImage = "https://www.padelisland.ge/og-image.jpg"
     private let client: Client
     private let gridPageURL: URI
     private let calendarsURL: URI
@@ -94,6 +95,7 @@ struct PadelIslandProvider: AvailabilityProvider {
                 name: name,
                 website: website,
                 logo: logo,
+                coverImage: coverImage,
                 courts: courts.sorted { lhs, rhs in
                     if lhs.name == rhs.name {
                         return lhs.id < rhs.id
@@ -173,7 +175,6 @@ enum PadelIslandMapper {
                 address: nil,
                 pricePerHour: nil,
                 rating: nil,
-                imageUrl: nil,
                 totalCourts: 1,
                 timeSlots: mapSlots(grid: grid, column: column, date: date)
             )

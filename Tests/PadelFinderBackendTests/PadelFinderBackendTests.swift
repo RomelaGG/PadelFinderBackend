@@ -31,6 +31,7 @@ struct PadelFinderBackendTests {
                 #expect(response.companies.count == 1)
                 #expect(response.companies.first?.id == "company-a")
                 #expect(response.companies.first?.logo == "https://example.com/logo.png")
+                #expect(response.companies.first?.coverImage == "https://example.com/cover.jpg")
                 #expect(response.companies.first?.courts.first?.id == "court-a")
             })
         }
@@ -39,10 +40,10 @@ struct PadelFinderBackendTests {
         #expect(requestedDates == ["2026-05-27"])
     }
 
-    @Test("Availability route expands backend logo paths")
-    func availabilityRouteExpandsBackendLogoPaths() async throws {
+    @Test("Availability route expands backend asset paths")
+    func availabilityRouteExpandsBackendAssetPaths() async throws {
         let service = MockAvailabilityService(companies: [
-            sampleCompany(logo: "/logos/company.png")
+            sampleCompany(logo: "/logos/company.png", coverImage: "/covers/company.jpg")
         ])
 
         try await withApp(configure: { app async throws in
@@ -57,6 +58,7 @@ struct PadelFinderBackendTests {
 
                     let response = try res.content.decode(AvailabilityResponse.self)
                     #expect(response.companies.first?.logo == "https://api.padelfinder.test/logos/company.png")
+                    #expect(response.companies.first?.coverImage == "https://api.padelfinder.test/covers/company.jpg")
                 }
             )
         }
@@ -501,13 +503,11 @@ struct PadelFinderBackendTests {
         #expect(courts[0].name == "Court 1")
         #expect(courts[0].pricePerHour == 80)
         #expect(courts[0].address == "Kus Tba, Tbilisi")
-        #expect(courts[0].imageUrl == nil)
         #expect(courts[0].timeSlots == [
             TimeSlot(time: "10:00", status: .booked, isBookable: false),
             TimeSlot(time: "11:00", status: .available, isBookable: true),
             TimeSlot(time: "12:00", status: .available, isBookable: true)
         ])
-        #expect(courts[1].imageUrl == "https://kustbapadel.ge/court-2.png")
         #expect(courts[1].timeSlots == [
             TimeSlot(time: "10:00", status: .booked, isBookable: false),
             TimeSlot(time: "11:00", status: .booked, isBookable: false),
@@ -668,13 +668,15 @@ private actor TestDateProvider: DateProviding {
 private func sampleCompany(
     companyID: String = "company-a",
     courtID: String = "court-a",
-    logo: String? = "https://example.com/logo.png"
+    logo: String? = "https://example.com/logo.png",
+    coverImage: String? = "https://example.com/cover.jpg"
 ) -> PadelCompanyAvailability {
     PadelCompanyAvailability(
         id: companyID,
         name: "Padel Company",
         website: "https://example.com",
         logo: logo,
+        coverImage: coverImage,
         courts: [sampleCourt(id: courtID)]
     )
 }
@@ -686,7 +688,6 @@ private func sampleCourt(id: String = "court-a") -> CourtAvailability {
         address: "123 Rustaveli Ave",
         pricePerHour: 60,
         rating: 4.8,
-        imageUrl: "https://example.com/court.jpg",
         totalCourts: 6,
         timeSlots: [
             TimeSlot(time: "09:00", status: .available, isBookable: true)

@@ -7,6 +7,7 @@ struct TbilisiPadelProvider: AvailabilityProvider {
     private let name = "Tbilisi Padel"
     private let website = "https://tbilisipadel.ge"
     private let logo = "/logos/tbilisi-padel.png"
+    private let coverImage = "https://tbilisipadel.ge/wp-content/uploads/bookingpress/1724117662_1724117643_mtatmindis-parki-tbilisi-padel.jpg"
 
     private let client: Client
     private let publicPageURL: URI
@@ -67,6 +68,7 @@ struct TbilisiPadelProvider: AvailabilityProvider {
                 name: name,
                 website: website,
                 logo: logo,
+                coverImage: coverImage,
                 courts: courtResults.sorted { $0.id < $1.id }
             )
         ]
@@ -149,7 +151,6 @@ struct TbilisiPadelCourt: Sendable, Equatable {
     let address: String?
     let pricePerHour: Int?
     let rating: Double?
-    let imageUrl: String?
     let totalCourts: Int
 
     static let defaultCourts: [TbilisiPadelCourt] = [
@@ -160,7 +161,6 @@ struct TbilisiPadelCourt: Sendable, Equatable {
             address: nil,
             pricePerHour: 60,
             rating: nil,
-            imageUrl: "https://tbilisipadel.ge/wp-content/uploads/bookingpress/1719499912_1719499910_ilias-bagi-padel-17.jpg",
             totalCourts: 1
         ),
         TbilisiPadelCourt(
@@ -170,7 +170,6 @@ struct TbilisiPadelCourt: Sendable, Equatable {
             address: nil,
             pricePerHour: 60,
             rating: nil,
-            imageUrl: "https://tbilisipadel.ge/wp-content/uploads/bookingpress/1724117662_1724117643_mtatmindis-parki-tbilisi-padel.jpg",
             totalCourts: 1
         )
     ]
@@ -215,7 +214,6 @@ enum TbilisiPadelMapper {
             address: court.address,
             pricePerHour: court.pricePerHour,
             rating: court.rating,
-            imageUrl: court.imageUrl,
             totalCourts: court.totalCourts,
             timeSlots: fillUnavailableSlots(slots)
         )

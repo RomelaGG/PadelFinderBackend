@@ -8,6 +8,7 @@ struct LemansPadelProvider: AvailabilityProvider {
     private let name = "Lemans Padel"
     private let website = "https://lemanspadel.ge/"
     private let logo = "/logos/lemans-padel.png"
+    private let coverImage = "https://lemanspadel.ge/wp-content/uploads/2025/08/WhatsApp-Image-2025-07-31-at-23.20.50_18b024d3.jpg"
     private let client: Client
     private let apiBaseURL: String
     private let durationMinutes: Int
@@ -54,6 +55,7 @@ struct LemansPadelProvider: AvailabilityProvider {
                 name: name,
                 website: website,
                 logo: logo,
+                coverImage: coverImage,
                 courts: courts
             )
         ]
@@ -150,7 +152,6 @@ enum LemansPadelMapper {
                     address: nil,
                     pricePerHour: court.durationPrices["60"],
                     rating: nil,
-                    imageUrl: court.photo,
                     totalCourts: 1,
                     timeSlots: slots.map { slot in
                         let availableCourtIDs = availableCourtsBySlot[slot.start] ?? []
@@ -175,7 +176,6 @@ struct LemansCourt: Decodable, Sendable {
     let id: Int
     let courtNumber: Int?
     let name: String?
-    let photo: String?
     let displayOrder: Int
     let durationPrices: [String: Int]
 
@@ -195,7 +195,6 @@ struct LemansCourt: Decodable, Sendable {
         case id
         case courtNumber = "court_number"
         case name
-        case photo
         case displayOrder = "display_order"
         case durationPrices = "duration_prices"
     }
@@ -206,7 +205,6 @@ struct LemansCourt: Decodable, Sendable {
         id = try container.decode(Int.self, forKey: .id)
         courtNumber = try container.decodeIfPresent(Int.self, forKey: .courtNumber)
         name = try container.decodeIfPresent(String.self, forKey: .name)
-        photo = try container.decodeIfPresent(String.self, forKey: .photo)
         displayOrder = try container.decodeIfPresent(Int.self, forKey: .displayOrder) ?? id
         durationPrices = try container.decodeIfPresent([String: Int].self, forKey: .durationPrices) ?? [:]
     }

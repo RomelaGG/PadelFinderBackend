@@ -17,7 +17,7 @@ func routes(_ app: Application, availabilityService injectedAvailabilityService:
         let baseURL = req.application.publicBaseURL
         return AvailabilityResponse(
             date: response.date,
-            companies: response.companies.map { $0.resolvingLogoURL(baseURL: baseURL) }
+            companies: response.companies.map { $0.resolvingAssetURLs(baseURL: baseURL) }
         )
     }
 
@@ -35,7 +35,7 @@ func routes(_ app: Application, availabilityService injectedAvailabilityService:
 
         return CompanyAvailabilityResponse(
             date: date,
-            company: company.resolvingLogoURL(baseURL: req.application.publicBaseURL)
+            company: company.resolvingAssetURLs(baseURL: req.application.publicBaseURL)
         )
     }
 }
@@ -57,11 +57,13 @@ private func resolveDate(from req: Request) throws -> String {
 }
 
 private extension PadelCompanyAvailability {
-    /// Returns a copy with a relative logo path (e.g. `/logos/x.png`) expanded to
-    /// an absolute URL against the configured API base URL. Absolute logo URLs are
-    /// left untouched.
-    func resolvingLogoURL(baseURL: String) -> PadelCompanyAvailability {
-        guard let logo, logo.hasPrefix("/") else {
+    /// Returns a copy with relative backend asset paths (e.g. `/logos/x.png`)
+    /// expanded to absolute URLs against the configured API base URL.
+    func resolvingAssetURLs(baseURL: String) -> PadelCompanyAvailability {
+        let resolvedLogo = resolvingBackendAssetURL(logo, baseURL: baseURL)
+        let resolvedCoverImage = resolvingBackendAssetURL(coverImage, baseURL: baseURL)
+
+        guard resolvedLogo != logo || resolvedCoverImage != coverImage else {
             return self
         }
 
@@ -69,8 +71,17 @@ private extension PadelCompanyAvailability {
             id: id,
             name: name,
             website: website,
-            logo: baseURL + logo,
+            logo: resolvedLogo,
+            coverImage: resolvedCoverImage,
             courts: courts
         )
+    }
+
+    private func resolvingBackendAssetURL(_ value: String?, baseURL: String) -> String? {
+        guard let value, value.hasPrefix("/") else {
+            return value
+        }
+
+        return baseURL + value
     }
 }
