@@ -26,6 +26,16 @@ struct PadelFinderBackendTests {
         }
     }
 
+    @Test("Gym Breeze logo asset is publicly served")
+    func gymBreezeLogoAssetIsServed() async throws {
+        try await withApp(configure: configure) { app in
+            try await app.testing().test(.GET, "logos/gym-breeze.png", afterResponse: { res async in
+                #expect(res.status == .ok)
+                #expect(res.body.readableBytes > 0)
+            })
+        }
+    }
+
     @Test("Availability route returns selected date")
     func availabilityRouteReturnsSelectedDate() async throws {
         let service = MockAvailabilityService(companies: [sampleCompany()])
@@ -665,6 +675,167 @@ struct PadelFinderBackendTests {
             "00:00"
         ])
         #expect(availability[1].timeSlots[9] == TimeSlot(time: "00:00", status: .available, isBookable: true))
+    }
+
+    @Test("Gym Breeze mapper builds location availability by price window")
+    func gymBreezeMapperBuildsLocationAvailabilityByPriceWindow() {
+        let ninoshviliID = "ninoshvili"
+        let radioCityID = "radio-city"
+        let locations = [
+            GymBreezeLocation(
+                id: ninoshviliID,
+                workingHours: [
+                    GymBreezeWorkingHour(
+                        dayOfWeek: 4,
+                        dayName: "Friday",
+                        openTime: "08:00:00",
+                        closeTime: "01:00:00",
+                        isClosed: false
+                    )
+                ],
+                pricingRules: [
+                    GymBreezePricingRule(
+                        id: nil,
+                        dayOfWeek: 4,
+                        startHour: "08:00:00",
+                        endHour: "11:00:00",
+                        hourlyRate: "60.00",
+                        isActive: true
+                    ),
+                    GymBreezePricingRule(
+                        id: nil,
+                        dayOfWeek: 4,
+                        startHour: "11:00:00",
+                        endHour: "18:00:00",
+                        hourlyRate: "40.00",
+                        isActive: true
+                    ),
+                    GymBreezePricingRule(
+                        id: nil,
+                        dayOfWeek: 4,
+                        startHour: "18:00:00",
+                        endHour: "01:00:00",
+                        hourlyRate: "60.00",
+                        isActive: true
+                    )
+                ],
+                specialPrices: [],
+                name: GymBreezeLocalizedText(en: "Ninoshvili Street", ka: nil),
+                address: GymBreezeLocalizedText(en: "Egnate Ninoshvili #64, Tbilisi, Georgia", ka: nil),
+                isActive: true
+            ),
+            GymBreezeLocation(
+                id: radioCityID,
+                workingHours: [
+                    GymBreezeWorkingHour(
+                        dayOfWeek: 4,
+                        dayName: "Friday",
+                        openTime: "08:00:00",
+                        closeTime: "01:00:00",
+                        isClosed: false
+                    )
+                ],
+                pricingRules: [
+                    GymBreezePricingRule(
+                        id: nil,
+                        dayOfWeek: 4,
+                        startHour: "08:00:00",
+                        endHour: "01:00:00",
+                        hourlyRate: "30.00",
+                        isActive: true
+                    )
+                ],
+                specialPrices: [],
+                name: GymBreezeLocalizedText(en: "Radio City", ka: nil),
+                address: GymBreezeLocalizedText(en: "Barbare Bairamashvili, #3, TBILISI, GEORGIA", ka: nil),
+                isActive: true
+            )
+        ]
+        let ninoshviliCourts: [GymBreezeCourt] = (1...8).map { (courtNumber: Int) -> GymBreezeCourt in
+            GymBreezeCourt(
+                id: "ninoshvili-court-\(courtNumber)",
+                sportTypeName: GymBreezeLocalizedText(en: "Padel", ka: nil),
+                locationName: GymBreezeLocalizedText(en: "Ninoshvili Street", ka: nil),
+                number: courtNumber,
+                displayName: GymBreezeLocalizedText(en: "Court \(courtNumber)", ka: nil),
+                isActive: true,
+                location: ninoshviliID,
+                sportType: "00000000-0000-0000-0000-000000000000"
+            )
+        }
+        let radioCityCourts: [GymBreezeCourt] = (1...3).map { (courtNumber: Int) -> GymBreezeCourt in
+            GymBreezeCourt(
+                id: "radio-city-court-\(courtNumber)",
+                sportTypeName: GymBreezeLocalizedText(en: "Padel", ka: nil),
+                locationName: GymBreezeLocalizedText(en: "Radio City", ka: nil),
+                number: courtNumber,
+                displayName: GymBreezeLocalizedText(en: "Court \(courtNumber)", ka: nil),
+                isActive: true,
+                location: radioCityID,
+                sportType: "00000000-0000-0000-0000-000000000000"
+            )
+        }
+        let availability = GymBreezeMapper.map(
+            locations: locations,
+            courtsByLocationID: [
+                ninoshviliID: ninoshviliCourts,
+                radioCityID: radioCityCourts
+            ],
+            availabilityByLocationID: [
+                ninoshviliID: GymBreezeAvailabilityResponse(
+                    locationID: ninoshviliID,
+                    date: "2026-06-19",
+                    availableSlots: [
+                        GymBreezeAvailableSlot(start: "2026-06-19T08:00:00+04:00", end: "2026-06-19T09:00:00+04:00"),
+                        GymBreezeAvailableSlot(start: "2026-06-19T10:00:00+04:00", end: "2026-06-19T11:00:00+04:00"),
+                        GymBreezeAvailableSlot(start: "2026-06-19T11:00:00+04:00", end: "2026-06-19T12:00:00+04:00"),
+                        GymBreezeAvailableSlot(start: "2026-06-19T17:00:00+04:00", end: "2026-06-19T18:00:00+04:00"),
+                        GymBreezeAvailableSlot(start: "2026-06-19T18:00:00+04:00", end: "2026-06-19T19:00:00+04:00"),
+                        GymBreezeAvailableSlot(start: "2026-06-20T00:00:00+04:00", end: "2026-06-20T01:00:00+04:00")
+                    ]
+                ),
+                radioCityID: GymBreezeAvailabilityResponse(
+                    locationID: radioCityID,
+                    date: "2026-06-19",
+                    availableSlots: [
+                        GymBreezeAvailableSlot(start: "2026-06-19T08:00:00+04:00", end: "2026-06-19T09:00:00+04:00"),
+                        GymBreezeAvailableSlot(start: "2026-06-20T00:00:00+04:00", end: "2026-06-20T01:00:00+04:00")
+                    ]
+                )
+            ],
+            selectedDate: "2026-06-19",
+            now: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(availability.count == 4)
+
+        #expect(availability[0].name == "Ninoshvili Street 08:00 - 11:00")
+        #expect(availability[0].address == "Egnate Ninoshvili #64, Tbilisi, Georgia")
+        #expect(availability[0].pricePerHour == 60)
+        #expect(availability[0].totalCourts == 8)
+        #expect(availability[0].timeSlots == [
+            TimeSlot(time: "08:00", status: .available, isBookable: true),
+            TimeSlot(time: "09:00", status: .booked, isBookable: false),
+            TimeSlot(time: "10:00", status: .available, isBookable: true)
+        ])
+
+        #expect(availability[1].name == "Ninoshvili Street 11:00 - 18:00")
+        #expect(availability[1].pricePerHour == 40)
+        #expect(availability[1].timeSlots.first == TimeSlot(time: "11:00", status: .available, isBookable: true))
+        #expect(availability[1].timeSlots.last == TimeSlot(time: "17:00", status: .available, isBookable: true))
+
+        #expect(availability[2].name == "Ninoshvili Street 18:00 - 01:00")
+        #expect(availability[2].pricePerHour == 60)
+        #expect(availability[2].timeSlots.map(\.time) == ["18:00", "19:00", "20:00", "21:00", "22:00", "23:00", "00:00"])
+        #expect(availability[2].timeSlots[0] == TimeSlot(time: "18:00", status: .available, isBookable: true))
+        #expect(availability[2].timeSlots[6] == TimeSlot(time: "00:00", status: .available, isBookable: true))
+
+        #expect(availability[3].name == "Radio City")
+        #expect(availability[3].address == "Barbare Bairamashvili, #3, TBILISI, GEORGIA")
+        #expect(availability[3].pricePerHour == 30)
+        #expect(availability[3].totalCourts == 3)
+        #expect(availability[3].timeSlots.first == TimeSlot(time: "08:00", status: .available, isBookable: true))
+        #expect(availability[3].timeSlots.last == TimeSlot(time: "00:00", status: .available, isBookable: true))
     }
 
     @Test("Fresh cache avoids provider fetch")
