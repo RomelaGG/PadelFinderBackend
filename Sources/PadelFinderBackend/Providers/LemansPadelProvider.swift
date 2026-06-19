@@ -24,6 +24,7 @@ struct LemansPadelProvider: AvailabilityProvider {
     }
 
     func fetchAvailability(on date: String, logger: Logger) async throws -> [PadelCompanyAvailability] {
+        let now = Date()
         let courtsResponse: LemansCourtsResponse = try await getJSON(path: "/api/courts")
         let slotsResponse: LemansAvailabilityResponse = try await getJSON(
             path: "/api/availability",
@@ -33,7 +34,9 @@ struct LemansPadelProvider: AvailabilityProvider {
             ]
         )
 
-        let availableSlots = slotsResponse.slots.filter(\.available)
+        let availableSlots = slotsResponse.slots.filter {
+            $0.available && LemansPadelDate.isFutureSlot($0.start, selectedDate: date, now: now)
+        }
         let availableCourtsBySlot = try await fetchAvailableCourtsBySlot(
             date: date,
             slots: availableSlots
@@ -42,7 +45,9 @@ struct LemansPadelProvider: AvailabilityProvider {
         let courts = LemansPadelMapper.map(
             courts: courtsResponse.courts,
             slots: slotsResponse.slots,
-            availableCourtsBySlot: availableCourtsBySlot
+            availableCourtsBySlot: availableCourtsBySlot,
+            selectedDate: date,
+            now: now
         )
 
         guard !courts.isEmpty else {
@@ -136,7 +141,9 @@ enum LemansPadelMapper {
     static func map(
         courts: [LemansCourt],
         slots: [LemansAvailabilitySlot],
-        availableCourtsBySlot: [String: Set<Int>]
+        availableCourtsBySlot: [String: Set<Int>],
+        selectedDate: String? = nil,
+        now: Date = Date()
     ) -> [CourtAvailability] {
         courts
             .sorted { lhs, rhs in
@@ -155,7 +162,10 @@ enum LemansPadelMapper {
                     totalCourts: 1,
                     timeSlots: slots.map { slot in
                         let availableCourtIDs = availableCourtsBySlot[slot.start] ?? []
-                        let isBookable = slot.available && availableCourtIDs.contains(court.id)
+                        let isFutureSlot = selectedDate.map {
+                            LemansPadelDate.isFutureSlot(slot.start, selectedDate: $0, now: now)
+                        } ?? true
+                        let isBookable = slot.available && isFutureSlot && availableCourtIDs.contains(court.id)
 
                         return TimeSlot(
                             time: slot.start,
@@ -165,6 +175,49 @@ enum LemansPadelMapper {
                     }
                 )
             }
+    }
+}
+
+enum LemansPadelDate {
+    static func isFutureSlot(_ time: String, selectedDate: String, now: Date) -> Bool {
+        guard let slotDate = slotDate(selectedDate: selectedDate, time: time) else {
+            return false
+        }
+
+        return slotDate > now
+    }
+
+    static func slotDate(selectedDate: String, time: String) -> Date? {
+        let dateParts = selectedDate.split(separator: "-")
+        let timeParts = time.split(separator: ":")
+
+        guard dateParts.count == 3,
+              timeParts.count >= 2,
+              let year = Int(dateParts[0]),
+              let month = Int(dateParts[1]),
+              let day = Int(dateParts[2]),
+              let hour = Int(timeParts[0]),
+              let minute = Int(timeParts[1]),
+              (0..<24).contains(hour),
+              (0..<60).contains(minute) else {
+            return nil
+        }
+
+        return calendar.date(
+            from: DateComponents(
+                year: year,
+                month: month,
+                day: day,
+                hour: hour,
+                minute: minute
+            )
+        )
+    }
+
+    private static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tbilisi") ?? .current
+        return calendar
     }
 }
 

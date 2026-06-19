@@ -406,6 +406,44 @@ struct PadelFinderBackendTests {
         ])
     }
 
+    @Test("Lemans mapper marks today's past slots booked")
+    func lemansMapperMarksTodayPastSlotsBooked() throws {
+        let courtsJSON = """
+        {
+          "courts": [
+            {
+              "id": 1,
+              "court_number": 1,
+              "name": "კორტი #1",
+              "display_order": 1,
+              "duration_prices": { "60": 70 }
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let courts = try JSONDecoder().decode(LemansCourtsResponse.self, from: courtsJSON).courts
+        let now = try #require(LemansPadelDate.slotDate(selectedDate: "2026-05-27", time: "18:00"))
+        let availability = LemansPadelMapper.map(
+            courts: courts,
+            slots: [
+                LemansAvailabilitySlot(start: "13:00", end: "14:00", available: true, availableCourts: 1),
+                LemansAvailabilitySlot(start: "19:00", end: "20:00", available: true, availableCourts: 1)
+            ],
+            availableCourtsBySlot: [
+                "13:00": [1],
+                "19:00": [1]
+            ],
+            selectedDate: "2026-05-27",
+            now: now
+        )
+
+        #expect(availability.first?.timeSlots == [
+            TimeSlot(time: "13:00", status: .booked, isBookable: false),
+            TimeSlot(time: "19:00", status: .available, isBookable: true)
+        ])
+    }
+
     @Test("Kustba mapper derives court availability from slot and court statuses")
     func kustbaMapperDerivesCourtAvailability() throws {
         let slotsJSON = """
