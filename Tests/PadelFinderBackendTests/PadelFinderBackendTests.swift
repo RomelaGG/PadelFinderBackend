@@ -653,7 +653,8 @@ struct PadelFinderBackendTests {
             "13:00",
             "14:00"
         ])
-        #expect(availability[0].timeSlots[0] == TimeSlot(time: "08:00", status: .available, isBookable: true))
+        #expect(availability[0].timeSlots[0] == TimeSlot(time: "08:00", status: .booked, isBookable: false))
+        #expect(availability[0].timeSlots[1] == TimeSlot(time: "09:00", status: .booked, isBookable: false))
         #expect(availability[0].timeSlots[2] == TimeSlot(time: "10:00", status: .booked, isBookable: false))
         #expect(availability[0].timeSlots[3] == TimeSlot(time: "11:00", status: .booked, isBookable: false))
         #expect(availability[0].timeSlots[5] == TimeSlot(time: "13:00", status: .available, isBookable: true))

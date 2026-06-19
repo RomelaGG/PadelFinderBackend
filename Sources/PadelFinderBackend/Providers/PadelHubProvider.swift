@@ -220,6 +220,7 @@ enum PadelHubMapper {
                         totalCourts: 1,
                         timeSlots: window.slotTimes.map { time in
                             let isBookable = !unavailableTimes.contains(time)
+                                && isFutureSlot(time, selectedDate: selectedDate, now: now)
 
                             return TimeSlot(
                                 time: time,
@@ -248,6 +249,18 @@ enum PadelHubMapper {
 
         let hoursUntilSlot = slotDate.timeIntervalSince(now) / 3600
         return hoursUntilSlot > 0 && hoursUntilSlot < 2
+    }
+
+    private static func isFutureSlot(
+        _ time: String,
+        selectedDate: String,
+        now: Date
+    ) -> Bool {
+        guard let slotDate = PadelHubDate.slotDate(selectedDate: selectedDate, time: time) else {
+            return false
+        }
+
+        return slotDate > now
     }
 
     private static func displayOrder(for court: PadelHubCourt) -> Int {
