@@ -1,7 +1,8 @@
 import Vapor
 
 func routes(_ app: Application, availabilityService injectedAvailabilityService: (any AvailabilityServiceProtocol)? = nil) throws {
-    let availabilityService = injectedAvailabilityService ?? AvailabilityService.live(client: app.client)
+    let availabilityService = injectedAvailabilityService
+        ?? AvailabilityService.live(client: app.client, kustbaStore: app.kustbaAvailabilityStore)
 
     app.get { req async in
         "It works!"

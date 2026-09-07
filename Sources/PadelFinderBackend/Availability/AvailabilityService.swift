@@ -42,13 +42,20 @@ final class AvailabilityService: AvailabilityServiceProtocol, Sendable {
         self.dateProvider = dateProvider
     }
 
-    static func live(client: Client) -> AvailabilityService {
+    /// Builds the production provider set. Kus Tba is read through
+    /// `kustbaStore` rather than fetched inline, because it is an order of
+    /// magnitude slower than every other provider and would otherwise set the
+    /// latency of the whole endpoint.
+    static func live(client: Client, kustbaStore: KustbaAvailabilityStore) -> AvailabilityService {
         AvailabilityService(
             providers: [
                 TbilisiPadelProvider(client: client),
                 PadelIslandProvider(client: client),
                 LemansPadelProvider(client: client),
-                KustbaPadelProvider(client: client),
+                CachedKustbaProvider(
+                    underlying: KustbaPadelProvider(client: client),
+                    store: kustbaStore
+                ),
                 PadelGldaniProvider(client: client),
                 PadelHubProvider(client: client),
                 GymBreezeProvider(client: client)

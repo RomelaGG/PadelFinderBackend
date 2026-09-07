@@ -939,6 +939,180 @@ struct PadelFinderBackendTests {
         let fetchCount = await provider.fetchCount()
         #expect(fetchCount == 2)
     }
+
+    @Test("Warm Kus Tba cache serves requests without hitting the provider")
+    func warmKustbaCacheServesWithoutProviderFetch() async {
+        let store = KustbaAvailabilityStore()
+        let provider = MockAvailabilityProvider(result: .success([sampleCompany(courtID: "court-a")]))
+        let dateProvider = TestDateProvider(Date(timeIntervalSince1970: 0))
+        let refresher = KustbaRefreshService(
+            provider: provider,
+            store: store,
+            configuration: .init(nearDaysAhead: 0, farDaysAhead: 0, nearInterval: 60, farInterval: 1800),
+            dateProvider: dateProvider
+        )
+
+        await refresher.refreshOnce(logger: Logger(label: "test"))
+        let refreshCount = await provider.fetchCount()
+
+        let cached = CachedKustbaProvider(underlying: provider, store: store, dateProvider: dateProvider)
+        let today = TbilisiDate.todayString(now: Date(timeIntervalSince1970: 0))
+        let companies = try? await cached.fetchAvailability(on: today, logger: Logger(label: "test"))
+
+        #expect(companies?.first?.courts.first?.id == "court-a")
+
+        // The read was served from the warm store, so no extra upstream fetch.
+        let afterReadCount = await provider.fetchCount()
+        #expect(afterReadCount == refreshCount)
+    }
+
+    @Test("Kus Tba cache miss falls back to a single coalesced fetch")
+    func kustbaCacheMissCoalescesConcurrentFetches() async {
+        let store = KustbaAvailabilityStore()
+        let provider = MockAvailabilityProvider(result: .success([sampleCompany(courtID: "court-a")]))
+        let dateProvider = TestDateProvider(Date(timeIntervalSince1970: 0))
+        let cached = CachedKustbaProvider(underlying: provider, store: store, dateProvider: dateProvider)
+
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<5 {
+                group.addTask {
+                    _ = try? await cached.fetchAvailability(on: "2026-05-27", logger: Logger(label: "test"))
+                }
+            }
+        }
+
+        // Five simultaneous misses must share one upstream fetch, not stampede.
+        let fetchCount = await provider.fetchCount()
+        #expect(fetchCount == 1)
+
+        // And the result is cached for subsequent reads.
+        _ = try? await cached.fetchAvailability(on: "2026-05-27", logger: Logger(label: "test"))
+        let afterCachedRead = await provider.fetchCount()
+        #expect(afterCachedRead == 1)
+    }
+
+    @Test("Kus Tba refresh keeps stale data when the provider fails")
+    func kustbaRefreshKeepsStaleDataOnFailure() async {
+        let store = KustbaAvailabilityStore()
+        let provider = MockAvailabilityProvider(result: .success([sampleCompany(courtID: "court-a")]))
+        let dateProvider = TestDateProvider(Date(timeIntervalSince1970: 0))
+        let refresher = KustbaRefreshService(
+            provider: provider,
+            store: store,
+            configuration: .init(nearDaysAhead: 0, farDaysAhead: 0, nearInterval: 60, farInterval: 1800),
+            dateProvider: dateProvider
+        )
+
+        await refresher.refreshOnce(logger: Logger(label: "test"))
+        await provider.setResult(.failure)
+
+        // Advance past the near-tier interval so the date is due again.
+        await dateProvider.set(Date(timeIntervalSince1970: 61))
+        await refresher.refreshOnce(logger: Logger(label: "test"))
+
+        let today = TbilisiDate.todayString(now: Date(timeIntervalSince1970: 0))
+        let cachedCompanies = await store.cachedValue(for: today, now: Date(timeIntervalSince1970: 0))
+
+        // A failed refresh must not blank out the venue.
+        #expect(cachedCompanies?.first?.courts.first?.id == "court-a")
+    }
+
+    @Test("Kus Tba refresh drops past days and keeps recently requested ones")
+    func kustbaRefreshTargetsPruneStaleDates() async {
+        let store = KustbaAvailabilityStore()
+        let now = Date(timeIntervalSince1970: 0)
+
+        await store.store([sampleCompany()], for: "2020-01-01", now: now)
+        await store.store([sampleCompany()], for: "2026-05-30", now: now)
+        _ = await store.cachedValue(for: "2026-05-30", now: now)
+
+        // Nothing is due yet: every stored date was just refreshed, and only the
+        // unseen window day needs fetching.
+        let due = await store.datesDueForRefresh(
+            nearDates: ["2026-05-27"],
+            farDates: ["2026-05-28"],
+            nearInterval: 300,
+            farInterval: 1800,
+            today: "2026-05-27",
+            now: now,
+            idleTimeout: 1800
+        )
+        #expect(due == ["2026-05-27", "2026-05-28"])
+
+        // Past dates are dropped entirely.
+        let prunedPast = await store.cachedValue(for: "2020-01-01", now: now)
+        #expect(prunedPast == nil)
+
+        // The recently requested out-of-window date is kept, on the far cadence.
+        let stillWarm = await store.cachedValue(for: "2026-05-30", now: now)
+        #expect(stillWarm != nil)
+
+        // An out-of-window date idle past the timeout stops being refreshed.
+        let laterDue = await store.datesDueForRefresh(
+            nearDates: ["2026-05-27"],
+            farDates: [],
+            nearInterval: 300,
+            farInterval: 1800,
+            today: "2026-05-27",
+            now: now.addingTimeInterval(3600),
+            idleTimeout: 1800
+        )
+        #expect(laterDue == ["2026-05-27"])
+    }
+
+    @Test("Kus Tba near days refresh more often than far days")
+    func kustbaNearDaysRefreshMoreOftenThanFarDays() async {
+        let store = KustbaAvailabilityStore()
+        let now = Date(timeIntervalSince1970: 0)
+
+        await store.store([sampleCompany()], for: "2026-05-27", now: now)
+        await store.store([sampleCompany()], for: "2026-05-29", now: now)
+
+        // 6 minutes on: the near day is due at 5 min, the far day is not (30 min).
+        let due = await store.datesDueForRefresh(
+            nearDates: ["2026-05-27"],
+            farDates: ["2026-05-29"],
+            nearInterval: 300,
+            farInterval: 1800,
+            today: "2026-05-27",
+            now: now.addingTimeInterval(360),
+            idleTimeout: 1800
+        )
+        #expect(due == ["2026-05-27"])
+
+        // 31 minutes on: both tiers are due.
+        let laterDue = await store.datesDueForRefresh(
+            nearDates: ["2026-05-27"],
+            farDates: ["2026-05-29"],
+            nearInterval: 300,
+            farInterval: 1800,
+            today: "2026-05-27",
+            now: now.addingTimeInterval(1860),
+            idleTimeout: 1800
+        )
+        #expect(laterDue == ["2026-05-27", "2026-05-29"])
+    }
+
+    @Test("Kus Tba tiers split the warm window into near and far days")
+    func kustbaTiersSplitWarmWindow() {
+        let now = Date(timeIntervalSince1970: 1_780_000_000)
+        let configuration = KustbaRefreshService.Configuration(nearDaysAhead: 1, farDaysAhead: 6)
+        let tiers = configuration.tiers(now: now)
+
+        #expect(tiers.near == ["2026-05-29", "2026-05-30"])
+        #expect(tiers.far == ["2026-05-31", "2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04"])
+    }
+
+    @Test("Tbilisi date window covers today plus the requested days")
+    func tbilisiDateWindowCoversRequestedDays() {
+        let now = Date(timeIntervalSince1970: 1_780_000_000)
+        let today = TbilisiDate.todayString(now: now)
+
+        #expect(TbilisiDate.upcomingDateStrings(daysAhead: 0, now: now) == [today])
+        #expect(TbilisiDate.upcomingDateStrings(daysAhead: 2, now: now).count == 3)
+        #expect(TbilisiDate.upcomingDateStrings(daysAhead: 2, now: now).first == today)
+        #expect(TbilisiDate.upcomingDateStrings(daysAhead: 2, now: now) == ["2026-05-29", "2026-05-30", "2026-05-31"])
+    }
 }
 
 private enum MockProviderResult: Sendable {

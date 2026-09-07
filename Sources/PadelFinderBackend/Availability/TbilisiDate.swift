@@ -17,6 +17,20 @@ enum TbilisiDate {
         formatter().string(from: now)
     }
 
+    /// Returns `today ... today + daysAhead` as `YYYY-MM-DD` strings in Tbilisi
+    /// time, used to decide which days the Kus Tba refresher keeps warm.
+    static func upcomingDateStrings(daysAhead: Int, now: Date = Date()) -> [String] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        let formatter = formatter()
+        let today = calendar.startOfDay(for: now)
+
+        return (0...max(0, daysAhead)).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: today).map(formatter.string(from:))
+        }
+    }
+
     static func validatedDateString(_ value: String) -> String? {
         guard value.count == 10 else {
             return nil
