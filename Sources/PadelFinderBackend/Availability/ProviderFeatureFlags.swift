@@ -9,7 +9,12 @@ enum ProviderFeatureFlags {
     static let tbilisiPadel = true
     static let padelIsland = true
     static let lemansPadel = true
-    static let kustbaPadel = true
+    // Off temporarily: the background refresher ran 24/7 regardless of traffic,
+    // about 950 requests an hour at their WordPress site (19 per date, 50 date
+    // refreshes an hour). Turn back on once the request rate is deliberate -
+    // a slower far tier, a concurrency cap, and a User-Agent that identifies us.
+    // Kus Tba disappears from /availability entirely while this is false.
+    static let kustbaPadel = false
     static let padelGldani = true
     static let padelHub = true
     static let gymBreeze = true

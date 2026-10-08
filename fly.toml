@@ -4,9 +4,13 @@
 # live in-process, so a second instance would serve a different cache and send a
 # second crawler at Kus Tba's site. Scaling past one waits on Redis
 # (SYSTEM-DESIGN-DIAGRAMS.md section 9).
+#
+# Deploy with `fly deploy --remote-only --ha=false`. The flag is not expressible
+# in this file: Fly creates two machines for high availability unless told
+# otherwise, and the settings below do not override that on a first deploy.
 
-app = 'padelfinder-api'
-primary_region = 'otp' # Bucharest - closest Fly region to Tbilisi
+app = 'padelfinder-ge'
+primary_region = 'fra' # Frankfurt - closest available region to Tbilisi (otp/waw are deprecated)
 
 [build]
 
@@ -14,7 +18,12 @@ primary_region = 'otp' # Bucharest - closest Fly region to Tbilisi
   LOG_LEVEL = 'info'
   # Turns relative asset paths (/logos/x.png) into absolute URLs in responses.
   # Must be changed together with the app name.
-  PUBLIC_BASE_URL = 'https://padelfinder-api.fly.dev'
+  PUBLIC_BASE_URL = 'https://padelfinder-ge.fly.dev'
+  # No KUSTBA_* settings while ProviderFeatureFlags.kustbaPadel is false - the
+  # refresher does not start. When it goes back on, the warm window and the 14
+  # days the API accepts have to be reconciled deliberately: matching them at
+  # the default 30-minute far cadence cost their site ~22,800 requests a day,
+  # against ~16,900 at a 60-minute one.
 
 [http_service]
   internal_port = 8080
