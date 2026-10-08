@@ -31,6 +31,15 @@ enum TbilisiDate {
         }
     }
 
+    /// Whether `value` falls inside `today ... today + daysAhead` in Tbilisi time.
+    ///
+    /// The request path uses this to reject dates nobody can play on. Without it
+    /// every distinct date is a new `AvailabilityCache` key and, on a miss, a
+    /// fresh ~20-request fan-out at Kus Tba's site.
+    static func isWithinWindow(_ value: String, daysAhead: Int, now: Date = Date()) -> Bool {
+        upcomingDateStrings(daysAhead: daysAhead, now: now).contains(value)
+    }
+
     static func validatedDateString(_ value: String) -> String? {
         guard value.count == 10 else {
             return nil

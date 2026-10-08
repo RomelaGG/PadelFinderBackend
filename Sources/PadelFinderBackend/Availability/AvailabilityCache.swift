@@ -27,6 +27,10 @@ actor AvailabilityCache {
     }
 
     func store(_ companies: [PadelCompanyAvailability], for key: String, now: Date) {
+        // Expired entries are never read again, so drop them here rather than
+        // keeping a day around until the process restarts. The request path
+        // bounds the keyspace to today ... today+14, so this stays cheap.
+        entries = entries.filter { now.timeIntervalSince($0.value.createdAt) < ttlSeconds }
         entries[key] = Entry(companies: companies, createdAt: now)
     }
 }

@@ -1,0 +1,38 @@
+# Fly.io deployment for PadelFinderBackend.
+#
+# Single machine on purpose. `AvailabilityCache` and the Kus Tba refresher both
+# live in-process, so a second instance would serve a different cache and send a
+# second crawler at Kus Tba's site. Scaling past one waits on Redis
+# (SYSTEM-DESIGN-DIAGRAMS.md section 9).
+
+app = 'padelfinder-api'
+primary_region = 'otp' # Bucharest - closest Fly region to Tbilisi
+
+[build]
+
+[env]
+  LOG_LEVEL = 'info'
+  # Turns relative asset paths (/logos/x.png) into absolute URLs in responses.
+  # Must be changed together with the app name.
+  PUBLIC_BASE_URL = 'https://padelfinder-api.fly.dev'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  # Must stay up: suspending the machine kills the warm Kus Tba cache, and the
+  # next request falls back to a 13-24s inline fetch.
+  auto_stop_machines = 'off'
+  min_machines_running = 1
+  max_machines_running = 1
+
+  [[http_service.checks]]
+    method = 'GET'
+    path = '/health'
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '20s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'

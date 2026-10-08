@@ -43,11 +43,11 @@ struct PadelFinderBackendTests {
         try await withApp(configure: { app async throws in
             try routes(app, availabilityService: service)
         }) { app in
-            try await app.testing().test(.GET, "availability?date=2026-05-27", afterResponse: { res async throws in
+            try await app.testing().test(.GET, "availability?date=\(inWindowDate)", afterResponse: { res async throws in
                 #expect(res.status == .ok)
 
                 let response = try res.content.decode(AvailabilityResponse.self)
-                #expect(response.date == "2026-05-27")
+                #expect(response.date == inWindowDate)
                 #expect(response.companies.count == 1)
                 #expect(response.companies.first?.id == "company-a")
                 #expect(response.companies.first?.logo == "https://example.com/logo.png")
@@ -57,7 +57,7 @@ struct PadelFinderBackendTests {
         }
 
         let requestedDates = await service.requestedDates()
-        #expect(requestedDates == ["2026-05-27"])
+        #expect(requestedDates == [inWindowDate])
     }
 
     @Test("Availability route expands backend asset paths")
@@ -72,7 +72,7 @@ struct PadelFinderBackendTests {
         }) { app in
             try await app.testing().test(
                 .GET,
-                "availability?date=2026-05-27",
+                "availability?date=\(inWindowDate)",
                 afterResponse: { res async throws in
                     #expect(res.status == .ok)
 
@@ -98,6 +98,91 @@ struct PadelFinderBackendTests {
                 #expect(response.date == TbilisiDate.todayString())
             })
         }
+    }
+
+    @Test("Health route reports ok")
+    func healthRouteReportsOk() async throws {
+        try await withApp(configure: configure) { app in
+            try await app.testing().test(.GET, "health", afterResponse: { res async throws in
+                #expect(res.status == .ok)
+
+                let response = try res.content.decode(HealthResponse.self)
+                #expect(response.status == "ok")
+            })
+        }
+    }
+
+    @Test("Availability route rejects a date beyond the window")
+    func availabilityRouteRejectsDateBeyondWindow() async throws {
+        let service = MockAvailabilityService(companies: [])
+        let beyondWindow = try #require(TbilisiDate.upcomingDateStrings(daysAhead: 15).last)
+
+        try await withApp(configure: { app async throws in
+            try routes(app, availabilityService: service)
+        }) { app in
+            try await app.testing().test(.GET, "availability?date=\(beyondWindow)", afterResponse: { res async in
+                #expect(res.status == .badRequest)
+            })
+        }
+
+        // The point of the bound: no provider is touched at all, so an unknown
+        // date cannot trigger a fan-out at Kus Tba's site.
+        let requestedDates = await service.requestedDates()
+        #expect(requestedDates.isEmpty)
+    }
+
+    @Test("Availability route rejects a date in the past")
+    func availabilityRouteRejectsPastDate() async throws {
+        let service = MockAvailabilityService(companies: [])
+
+        try await withApp(configure: { app async throws in
+            try routes(app, availabilityService: service)
+        }) { app in
+            try await app.testing().test(.GET, "availability?date=2020-01-01", afterResponse: { res async in
+                #expect(res.status == .badRequest)
+            })
+        }
+
+        let requestedDates = await service.requestedDates()
+        #expect(requestedDates.isEmpty)
+    }
+
+    @Test("Availability route accepts the last date in the window")
+    func availabilityRouteAcceptsLastDateInWindow() async throws {
+        let service = MockAvailabilityService(companies: [])
+        let lastInWindow = try #require(TbilisiDate.upcomingDateStrings(daysAhead: 14).last)
+
+        try await withApp(configure: { app async throws in
+            try routes(app, availabilityService: service)
+        }) { app in
+            try await app.testing().test(.GET, "availability?date=\(lastInWindow)", afterResponse: { res async in
+                #expect(res.status == .ok)
+            })
+        }
+
+        let requestedDates = await service.requestedDates()
+        #expect(requestedDates == [lastInWindow])
+    }
+
+    @Test("Company availability route rejects a date beyond the window")
+    func companyAvailabilityRouteRejectsDateBeyondWindow() async throws {
+        let service = MockAvailabilityService(companies: [sampleCompany()])
+        let beyondWindow = try #require(TbilisiDate.upcomingDateStrings(daysAhead: 15).last)
+
+        try await withApp(configure: { app async throws in
+            try routes(app, availabilityService: service)
+        }) { app in
+            try await app.testing().test(
+                .GET,
+                "availability/company/company-a?date=\(beyondWindow)",
+                afterResponse: { res async in
+                    #expect(res.status == .badRequest)
+                }
+            )
+        }
+
+        let requestedDates = await service.requestedDates()
+        #expect(requestedDates.isEmpty)
     }
 
     @Test("Availability route rejects invalid date")
@@ -126,18 +211,18 @@ struct PadelFinderBackendTests {
         try await withApp(configure: { app async throws in
             try routes(app, availabilityService: service)
         }) { app in
-            try await app.testing().test(.GET, "availability/company/company-b?date=2026-05-27", afterResponse: { res async throws in
+            try await app.testing().test(.GET, "availability/company/company-b?date=\(inWindowDate)", afterResponse: { res async throws in
                 #expect(res.status == .ok)
 
                 let response = try res.content.decode(CompanyAvailabilityResponse.self)
-                #expect(response.date == "2026-05-27")
+                #expect(response.date == inWindowDate)
                 #expect(response.company.id == "company-b")
                 #expect(response.company.courts.first?.id == "court-b")
             })
         }
 
         let requestedDates = await service.requestedDates()
-        #expect(requestedDates == ["2026-05-27"])
+        #expect(requestedDates == [inWindowDate])
     }
 
     @Test("Company availability route returns 404 for unknown company")
@@ -147,7 +232,7 @@ struct PadelFinderBackendTests {
         try await withApp(configure: { app async throws in
             try routes(app, availabilityService: service)
         }) { app in
-            try await app.testing().test(.GET, "availability/company/does-not-exist?date=2026-05-27", afterResponse: { res async in
+            try await app.testing().test(.GET, "availability/company/does-not-exist?date=\(inWindowDate)", afterResponse: { res async in
                 #expect(res.status == .notFound)
             })
         }
@@ -1193,6 +1278,11 @@ private actor TestDateProvider: DateProviding {
         current = date
     }
 }
+
+/// A date the availability routes accept: inside today ... today+14 in Tbilisi
+/// time. Derived rather than hardcoded, so these tests do not expire.
+private let inWindowDate = TbilisiDate.upcomingDateStrings(daysAhead: 1).last
+    ?? TbilisiDate.todayString()
 
 private func sampleCompany(
     companyID: String = "company-a",

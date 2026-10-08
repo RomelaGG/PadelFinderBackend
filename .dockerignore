@@ -1,2 +1,11 @@
 .build/
 .swiftpm/
+.git/
+.github/
+.vscode/
+.claude/
+.DS_Store
+**/.DS_Store
+*.md
+fly.toml
+docker-compose.yml

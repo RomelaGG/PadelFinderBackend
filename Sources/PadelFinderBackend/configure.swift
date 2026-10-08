@@ -65,6 +65,15 @@ final class KustbaRefreshLifecycleHandler: LifecycleHandler {
 public func configure(_ app: Application) async throws {
     app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
+    // Without these a venue that accepts the connection and then goes quiet
+    // holds our request open indefinitely. The read timeout has to clear the
+    // slowest upstream call we make — Kus Tba's `admin-ajax.php` answers in
+    // 5-13s — because every provider shares this client.
+    app.http.client.configuration.timeout = HTTPClient.Configuration.Timeout(
+        connect: .seconds(5),
+        read: .seconds(30)
+    )
+
     if let baseURL = Environment.get("PUBLIC_BASE_URL") {
         app.publicBaseURL = baseURL
     }
