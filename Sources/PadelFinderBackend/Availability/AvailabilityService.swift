@@ -46,20 +46,48 @@ final class AvailabilityService: AvailabilityServiceProtocol, Sendable {
     /// `kustbaStore` rather than fetched inline, because it is an order of
     /// magnitude slower than every other provider and would otherwise set the
     /// latency of the whole endpoint.
-    static func live(client: Client, kustbaStore: KustbaAvailabilityStore) -> AvailabilityService {
-        AvailabilityService(
-            providers: [
-                TbilisiPadelProvider(client: client),
-                PadelIslandProvider(client: client),
-                LemansPadelProvider(client: client),
+    /// Each provider is gated by its switch in `ProviderFeatureFlags`.
+    static func live(
+        client: Client,
+        kustbaStore: KustbaAvailabilityStore,
+        logger: Logger
+    ) -> AvailabilityService {
+        var providers: [any AvailabilityProvider] = []
+
+        if ProviderFeatureFlags.tbilisiPadel {
+            providers.append(TbilisiPadelProvider(client: client))
+        }
+        if ProviderFeatureFlags.padelIsland {
+            providers.append(PadelIslandProvider(client: client))
+        }
+        if ProviderFeatureFlags.lemansPadel {
+            providers.append(LemansPadelProvider(client: client))
+        }
+        if ProviderFeatureFlags.kustbaPadel {
+            providers.append(
                 CachedKustbaProvider(
                     underlying: KustbaPadelProvider(client: client),
                     store: kustbaStore
-                ),
-                PadelGldaniProvider(client: client),
-                PadelHubProvider(client: client),
-                GymBreezeProvider(client: client)
-            ],
+                )
+            )
+        }
+        if ProviderFeatureFlags.padelGldani {
+            providers.append(PadelGldaniProvider(client: client))
+        }
+        if ProviderFeatureFlags.padelHub {
+            providers.append(PadelHubProvider(client: client))
+        }
+        if ProviderFeatureFlags.gymBreeze {
+            providers.append(GymBreezeProvider(client: client))
+        }
+
+        logger.notice(
+            "Availability providers registered",
+            metadata: ["providers": .string(providers.map(\.id).joined(separator: ", "))]
+        )
+
+        return AvailabilityService(
+            providers: providers,
             cache: AvailabilityCache(ttlSeconds: 120)
         )
     }

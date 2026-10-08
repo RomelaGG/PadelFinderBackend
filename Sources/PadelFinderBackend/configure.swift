@@ -73,13 +73,17 @@ public func configure(_ app: Application) async throws {
     // 2.5s for every other provider, so fetching it on the request path made it
     // the sole driver of `/availability` latency. Days near today refresh often;
     // days further out refresh slowly, to keep the load on their site low.
-    let kustbaStore = app.kustbaAvailabilityStore
-    let refreshService = KustbaRefreshService(
-        provider: KustbaPadelProvider(client: app.client),
-        store: kustbaStore,
-        configuration: .fromEnvironment()
-    )
-    app.lifecycle.use(KustbaRefreshLifecycleHandler(service: refreshService))
+    if ProviderFeatureFlags.kustbaPadel {
+        let kustbaStore = app.kustbaAvailabilityStore
+        let refreshService = KustbaRefreshService(
+            provider: KustbaPadelProvider(client: app.client),
+            store: kustbaStore,
+            configuration: .fromEnvironment()
+        )
+        app.lifecycle.use(KustbaRefreshLifecycleHandler(service: refreshService))
+    } else {
+        app.logger.notice("Kus Tba disabled by feature flag; background refresh not started")
+    }
 
     // register routes
     try routes(app)
