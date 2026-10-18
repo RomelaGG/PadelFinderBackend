@@ -1,7 +1,11 @@
 # ================================
 # Build image
 # ================================
-FROM swift:6.1-noble AS build
+# 6.2, not 6.1: jwt-kit 5.7.1 declares swift-tools-version 6.2, so a 6.1
+# toolchain fails at `swift package resolve` before it compiles a single line.
+# Keep this in step with the toolchain the package actually resolves against -
+# BUILD-PLAN.md section 4 names this image for CI too, so CI must move with it.
+FROM swift:6.2-noble AS build
 
 # Install OS updates
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
