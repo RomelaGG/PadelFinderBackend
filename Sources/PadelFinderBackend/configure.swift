@@ -1,3 +1,4 @@
+import Fluent
 import NIOConcurrencyHelpers
 import Vapor
 
@@ -78,6 +79,12 @@ public func configure(_ app: Application) async throws {
         app.publicBaseURL = baseURL
     }
 
+    // Postgres and accounts. Registering the database does not connect to it -
+    // Fluent is lazy - so the availability endpoints keep working, and keep
+    // being testable, with no database running.
+    try configureDatabase(app)
+    let authFactory = try await configureAuth(app)
+
     // Keep Kus Tba warm in the background. It answers in 13-24s, against under
     // 2.5s for every other provider, so fetching it on the request path made it
     // the sole driver of `/availability` latency. Days near today refresh often;
@@ -95,5 +102,5 @@ public func configure(_ app: Application) async throws {
     }
 
     // register routes
-    try routes(app)
+    try routes(app, authFactory: authFactory)
 }

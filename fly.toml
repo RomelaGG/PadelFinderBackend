@@ -14,8 +14,20 @@ primary_region = 'fra' # Frankfurt - closest available region to Tbilisi (otp/wa
 
 [build]
 
+# Migrations run here, not at boot: a failed migration fails the deploy instead
+# of leaving a half-migrated database serving traffic (BUILD-PLAN.md section 4).
+[deploy]
+  release_command = 'migrate --yes'
+
 [env]
   LOG_LEVEL = 'info'
+  # DATABASE_URL and JWT_SECRET are Fly secrets, not env entries - the app
+  # refuses to boot in production without either.
+  # Fly's proxy sets this header from the real connection, so it cannot be
+  # forged from outside. Without it every request looks like it comes from the
+  # proxy and the per-IP code limit would apply to all callers at once. Never
+  # point this at X-Forwarded-For, which any client can send.
+  TRUSTED_CLIENT_IP_HEADER = 'Fly-Client-IP'
   # Turns relative asset paths (/logos/x.png) into absolute URLs in responses.
   # Must be changed together with the app name.
   PUBLIC_BASE_URL = 'https://padelfinder-ge.fly.dev'

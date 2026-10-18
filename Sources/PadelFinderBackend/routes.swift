@@ -4,13 +4,28 @@ struct HealthResponse: Content, Equatable, Sendable {
     let status: String
 }
 
-func routes(_ app: Application, availabilityService injectedAvailabilityService: (any AvailabilityServiceProtocol)? = nil) throws {
+func routes(
+    _ app: Application,
+    availabilityService injectedAvailabilityService: (any AvailabilityServiceProtocol)? = nil,
+    authFactory: AuthControllerFactory? = nil
+) throws {
     let availabilityService = injectedAvailabilityService
         ?? AvailabilityService.live(
             client: app.client,
             kustbaStore: app.kustbaAvailabilityStore,
             logger: app.logger
         )
+
+    // Optional so the availability tests can register routes without standing
+    // up accounts. `configure` always passes one.
+    if let authFactory {
+        // The error middleware is scoped to /auth rather than global: it exists
+        // to put a stable `code` next to the message so the iOS client can
+        // branch on it, and the availability endpoints have no such contract.
+        try app
+            .grouped(AuthErrorMiddleware())
+            .register(collection: AuthController(factory: authFactory))
+    }
 
     app.get { req async in
         "It works!"

@@ -10,12 +10,15 @@
 #
 #   Build images: docker compose build
 #      Start app: docker compose up app
+#    Just the DB: docker compose up -d db db-test
+#    Migrate:     docker compose run --rm migrate
 #       Stop all: docker compose down
 #
 
 x-shared_environment: &shared_environment
   LOG_LEVEL: ${LOG_LEVEL:-debug}
-  
+  DATABASE_URL: postgres://padelfinder:padelfinder@db:5432/padelfinder
+
 services:
   app:
     image: padelfinderbackend:latest
@@ -23,7 +26,60 @@ services:
       context: .
     environment:
       <<: *shared_environment
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - '8080:8080'
     # user: '0' # uncomment to run as root for testing purposes even though Dockerfile defines 'vapor' user.
     command: ["serve", "--env", "production", "--hostname", "0.0.0.0", "--port", "8080"]
+
+  # Migrations are a separate one-shot run, never part of booting the server.
+  # On Fly the same command is the release step, so a failed migration fails the
+  # deploy instead of leaving a half-migrated database serving traffic.
+  migrate:
+    image: padelfinderbackend:latest
+    build:
+      context: .
+    environment:
+      <<: *shared_environment
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["migrate", "--yes"]
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: padelfinder
+      POSTGRES_PASSWORD: padelfinder
+      POSTGRES_DB: padelfinder
+    ports:
+      - '5432:5432'
+    volumes:
+      - padelfinder_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U padelfinder -d padelfinder"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # A second database so `swift test` can migrate and revert freely without
+  # wiping whatever you were looking at in the development one. Deliberately
+  # has no volume: the test database is meant to be disposable.
+  db-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: padelfinder
+      POSTGRES_PASSWORD: padelfinder
+      POSTGRES_DB: padelfinder_test
+    ports:
+      - '5433:5432'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U padelfinder -d padelfinder_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  padelfinder_db:
