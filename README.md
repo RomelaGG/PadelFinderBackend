@@ -49,6 +49,46 @@ Reverting works too, and is worth checking before shipping a new migration:
 swift run PadelFinderBackend migrate --revert --yes
 ```
 
+### Test accounts
+
+`/auth/register` only creates a placeholder, and `login` refuses anything that
+is not `active`, so a usable account normally needs the emailed code. In
+production those go out through Resend's test sender, which delivers only to
+the address the Resend account was registered with - so an arbitrary test
+address can never be verified that way. `seed-user` creates a verified account
+directly:
+
+```bash
+swift run PadelFinderBackend seed-user --email test@example.com --display-name "Test User" --yes
+```
+
+The password is generated and printed **once**; it is never accepted as an
+argument, because on production that would leave it in shell history and in
+Fly's audit trail. Nothing is written until you confirm, and `--yes` (ConsoleKit's
+global flag, as with `migrate --yes`) is required on a non-interactive shell.
+
+Seeding an address that already has a password refuses unless you pass
+`--reset-password`, which replaces it and revokes every live session exactly as
+a password reset does. A sign-up still waiting on its code, or an account that
+signed up with Apple or Google and has no password, needs no such opt-in -
+neither case takes a working login away from anyone.
+
+On Fly, run it on the machine:
+
+```bash
+fly ssh console -a padelfinder-ge -C "/app/PadelFinderBackend seed-user --email test@example.com --yes"
+```
+
+Do **not** add `--env production` there. Nothing the command needs is
+environment-gated - `DATABASE_URL` is a Fly secret and is present either way -
+but `--env production` activates the mailer validation that refuses to boot
+without `OTP_MAILER=resend` and a `RESEND_API_KEY`, which would stop a command
+that sends no email at all. This is the same reason `release_command` in
+`fly.toml` carries no `--env`.
+
+There is no route for any of this and there must not be: it stands in for the
+proof that an address is owned, which is only safe behind shell access.
+
 ### Running
 
 ```bash

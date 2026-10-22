@@ -85,6 +85,11 @@ public func configure(_ app: Application) async throws {
     try configureDatabase(app)
     let authFactory = try await configureAuth(app)
 
+    // CLI only, never a route: it creates a verified account without the
+    // emailed code, which is the one thing a deployed environment has no other
+    // way to do.
+    app.asyncCommands.use(SeedUserCommand(factory: authFactory), as: "seed-user")
+
     // Keep Kus Tba warm in the background. It answers in 13-24s, against under
     // 2.5s for every other provider, so fetching it on the request path made it
     // the sole driver of `/availability` latency. Days near today refresh often;

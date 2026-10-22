@@ -163,6 +163,79 @@ struct AuthService: Sendable {
         return (try await tokens.issuePair(for: try user.requireID()), user)
     }
 
+    // MARK: - Seeding (CLI only; see `SeedUserCommand`)
+
+    /// Creates or completes an email-verified password account, skipping the
+    /// emailed code.
+    ///
+    /// Reached only from the `seed-user` command. There is no route and there
+    /// must never be one: this stands in for the proof that an address is
+    /// owned, which is only safe with shell access to the machine.
+    ///
+    /// Goes through `AccountLinker` rather than writing rows, which is what
+    /// keeps the invariant structural rather than careful: `User.email` is only
+    /// ever written from a proved claim, and the linker is the only writer.
+    /// Seeding an address that already has an Apple or Google identity
+    /// therefore lands in that same account instead of forking a second one.
+    ///
+    /// Takes an already-computed hash so Bcrypt runs outside the linker's
+    /// transaction, and so plaintext never reaches this layer at all.
+    func seedVerifiedPasswordUser(
+        email rawEmail: String,
+        passwordHash: String,
+        displayName: String?,
+        replaceExistingPassword: Bool
+    ) async throws -> (user: User, replacedPassword: Bool) {
+        let email = rawEmail.normalizedEmail
+
+        // Resolved before anything is written. The merge branch in
+        // `AccountLinker.proveEmail` can hand back a *different*, real account
+        // than the placeholder that was looked up, so "whose password am I
+        // about to write?" has to be answered first - and answered here rather
+        // than only in the command, because a guard that lives in the UI layer
+        // is one the next caller skips.
+        let signup = try await linker.userForPasswordIdentity(email: email)
+        let holder = try await linker.activeUser(withProvedEmail: email)
+
+        var replacingPassword = false
+
+        if let target = holder ?? signup?.user, target.status == .active {
+            let targetID = try target.requireID()
+            let hasPassword = try await UserCredential.query(on: database)
+                .filter(\.$user.$id == targetID)
+                .count() > 0
+
+            // A `pendingVerification` placeholder is deliberately not covered
+            // here: overwriting its password grants nothing, for the same
+            // reason `adoptExistingSignup` is allowed to.
+            guard hasPassword == false || replaceExistingPassword else {
+                throw SeedUserError.accountExists(email)
+            }
+
+            replacingPassword = hasPassword
+        }
+
+        let user = try await linker.resolve(
+            IdentityClaim(
+                provider: .password,
+                subject: email,
+                email: email,
+                emailIsProved: true,
+                displayName: displayName ?? signup?.user.displayName
+            )
+        )
+
+        try await storePasswordHash(passwordHash, for: user, on: database)
+
+        // A password that changed under an account must not leave a live
+        // session behind it. Same contract as `resetPassword`.
+        if replacingPassword {
+            try await tokens.revokeAll(for: try user.requireID(), reason: .passwordReset)
+        }
+
+        return (user, replacingPassword)
+    }
+
     func login(
         email rawEmail: String,
         password: String,
