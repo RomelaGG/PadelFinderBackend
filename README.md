@@ -143,6 +143,33 @@ ln -s ../../Scripts/check-secrets.sh .git/hooks/pre-commit
 It carries one allowlisted file — a Supabase key committed in `793619c` and
 flagged in ARCHITECTURE.md section 8. That is recorded debt, not a clean file.
 
+### Deployment
+
+Merging into `main` deploys to Fly automatically — `.github/workflows/deploy.yml`
+builds the image on Fly's remote builder, runs `migrate --yes` as the release
+step, and smoke-tests `/health` through the public URL. Nothing gates it yet:
+there is no test job in front of the deploy, so a broken merge reaches
+production (BUILD-PLAN.md E-01 is still to do).
+
+The break-glass path, unchanged:
+
+```bash
+fly deploy --remote-only --ha=false
+```
+
+`--ha=false` is not optional. Without it Fly brings up a second machine, which
+splits the in-process availability cache and sends a second crawler at Kus Tba —
+see the header of `fly.toml`.
+
+The workflow authenticates with a `FLY_API_TOKEN` repository secret. Use an
+app-scoped **deploy** token rather than a personal access token, so a leaked
+secret cannot reach the rest of the Fly account:
+
+```bash
+fly tokens create deploy -a padelfinder-ge
+gh secret set FLY_API_TOKEN
+```
+
 ### See more
 
 - [Vapor Website](https://vapor.codes)

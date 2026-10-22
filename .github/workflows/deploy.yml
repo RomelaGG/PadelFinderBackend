@@ -1,0 +1,82 @@
+# Deploys to Fly on every merge into main (BUILD-PLAN.md E-02).
+#
+# Nothing gates this: there is no test job in front of it yet. The safety net is
+# the migration release step - a failed `migrate --yes` fails the deploy rather
+# than leaving a half-migrated database serving traffic - and the /health smoke
+# test at the end. A PR test workflow (E-01) is the next thing to add here.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # Lets a deploy be re-run by hand - after a rolled-back release, or to retry a
+  # flake - without inventing an empty commit.
+  workflow_dispatch:
+
+# Single machine by design (see the header of fly.toml): the availability cache
+# and the Kus Tba refresher live in-process. Two concurrent deploys would fight
+# over that one machine and could interleave two `migrate --yes` release steps
+# against one database. Queue them instead - and never cancel one mid-flight,
+# which could leave the release step half-applied.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # A cold Swift release build on the remote builder is slow but not hours
+    # long; the 360-minute default would let a hung build sit all day.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # Without this the failure arrives later as an opaque flyctl auth error.
+      - name: Check FLY_API_TOKEN is set
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo '::error::FLY_API_TOKEN is not set. Create an app-scoped deploy token with "fly tokens create deploy -a padelfinder-ge" and store it with "gh secret set FLY_API_TOKEN".'
+            exit 1
+          fi
+
+      # Pinned to a release tag, not the @master that Fly's docs suggest: this
+      # step installs the binary that then holds the deploy token, so it should
+      # not change under us silently. 1.6 is identical to master today. Bump it
+      # deliberately if a flyctl incompatibility shows up.
+      - uses: superfly/flyctl-actions/setup-flyctl@1.6
+
+      # --ha=false is required, not cosmetic: without it Fly creates two machines
+      # on deploy, which splits the in-process cache and sends a second crawler
+      # at Kus Tba's site. It cannot be expressed in fly.toml.
+      #
+      # --remote-only builds the image on Fly's builder, so this runner needs
+      # neither a Swift toolchain nor a Docker layer cache.
+      #
+      # Migrations need no step of their own: fly.toml's
+      # [deploy] release_command = 'migrate --yes' runs them, and a failure there
+      # fails the deploy.
+      - name: Deploy to Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --ha=false
+
+      # `fly deploy` already waits on the machine's own health check, which runs
+      # inside the private network. This is the outside view: it proves the
+      # public proxy, TLS and routing work too. The retries absorb the few
+      # seconds of proxy propagation after a release.
+      #
+      # The URL must match PUBLIC_BASE_URL in fly.toml, which must in turn match
+      # the app name - change all three together.
+      - name: Smoke-test /health
+        run: |
+          body=$(curl -fsS --retry 5 --retry-all-errors --retry-delay 5 --max-time 10 \
+            https://padelfinder-ge.fly.dev/health)
+          echo "GET /health -> $body"
+          if [ "$body" != '{"status":"ok"}' ]; then
+            echo "::error::Unexpected /health body: $body"
+            exit 1
+          fi

@@ -31,6 +31,20 @@ primary_region = 'fra' # Frankfurt - closest available region to Tbilisi (otp/wa
   # Turns relative asset paths (/logos/x.png) into absolute URLs in responses.
   # Must be changed together with the app name.
   PUBLIC_BASE_URL = 'https://padelfinder-ge.fly.dev'
+  # Accepted `aud` values for the social sign-in endpoints. Client ids are
+  # public identifiers by design - they travel inside every identity token we
+  # receive - so they belong here and not in `fly secrets`. Empty or absent
+  # means the matching endpoint answers 503 `provider_not_configured`, which is
+  # the safe default: it never accepts an unaudienced token.
+  #
+  # Apple needs only the bundle id, exactly as registered. The server verifies
+  # the native token against Apple's public JWKS, so there is no Services ID
+  # and no client secret here.
+  APPLE_CLIENT_IDS = 'GR.PadelFinder'
+  # Uncomment with the iOS OAuth client id from Google Cloud Console. Left
+  # commented, Continue with Google stays honestly off in production rather
+  # than half-configured.
+  # GOOGLE_CLIENT_IDS = '000000000000-abcdefghijklmnop.apps.googleusercontent.com'
   # No KUSTBA_* settings while ProviderFeatureFlags.kustbaPadel is false - the
   # refresher does not start. When it goes back on, the warm window and the 14
   # days the API accepts have to be reconciled deliberately: matching them at
